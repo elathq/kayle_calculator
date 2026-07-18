@@ -1,68 +1,218 @@
 # API guide
 
-This document describes the public HTTP interface used by the hosted Kayle
-Damage Simulator. It covers catalog discovery, readable identifiers, request
-validation, construction of a simulation payload, and the response timeline.
-
-## Base URL and format
+Use the hosted API at:
 
 ```text
 https://kayle-calculator.onrender.com
 ```
 
-The API does not require authentication. Responses are JSON. Simulation
-requests must use an uncompressed JSON body:
+`POST /api/simulate` requires:
 
 ```http
 Content-Type: application/json
-Content-Encoding: identity
 ```
 
-Normal HTTP libraries add `Content-Length` automatically. Browser requests
-from another website require CORS permission; the hosted server currently
-supports same-origin UI requests and direct/server-side HTTP clients, but does
-not advertise cross-origin browser access.
+Items, rune paths, runes, shards, presets, and active items are submitted with
+the string keys shown in the tables below. Numeric Riot IDs returned by catalog
+endpoints are metadata only.
 
-## Public identifiers
+## Key tables
 
-Items, rune paths, runes, and shards use readable string keys in request
-payloads:
+### Items
 
-```json
-{
-  "item": "nashors_tooth",
-  "primary_path": "precision",
-  "rune": "fleet_footwork",
-  "shard": "attack_speed"
-}
-```
+Use the value from the `key` column inside `builds[].items`.
 
-Catalog responses also contain Riot numeric `id` fields for icons and source
-tracking. Numeric IDs are metadata and are not accepted in `POST /api/simulate`.
-Use each catalog object's `key` field when building a request.
+| Key | Item | Active action |
+|---|---|---|
+| `boots` | Boots | — |
+| `boots_of_swiftness` | Boots of Swiftness | — |
+| `berserkers_greaves` | Berserker's Greaves | — |
+| `gunmetal_greaves` | Gunmetal Greaves | — |
+| `dorans_ring` | Doran's Ring | — |
+| `dorans_bow` | Doran's Bow | — |
+| `dorans_blade` | Doran's Blade | — |
+| `dark_seal` | Dark Seal | — |
+| `swiftmarch` | Swiftmarch | — |
+| `spellslingers_shoes` | Spellslinger's Shoes | — |
+| `sorcerers_shoes` | Sorcerer's Shoes | — |
+| `dusk_and_dawn` | Dusk and Dawn | — |
+| `guinsoos_rageblade` | Guinsoo's Rageblade | — |
+| `lich_bane` | Lich Bane | — |
+| `rylais_crystal_scepter` | Rylai's Crystal Scepter | — |
+| `shadowflame` | Shadowflame | — |
+| `zhonyas_hourglass` | Zhonya's Hourglass | `ITEM_ACTIVE` |
+| `banshees_veil` | Banshee's Veil | — |
+| `rabadons_deathcap` | Rabadon's Deathcap | — |
+| `cryptbloom` | Cryptbloom | — |
+| `void_staff` | Void Staff | — |
+| `hextech_gunblade` | Hextech Gunblade | `ITEM_ACTIVE` |
+| `nashors_tooth` | Nashor's Tooth | — |
+| `cosmic_drive` | Cosmic Drive | — |
+| `stormsurge` | Stormsurge | — |
+| `riftmaker` | Riftmaker | — |
+| `kraken_slayer` | Kraken Slayer | — |
+| `terminus` | Terminus | — |
+| `infinity_edge` | Infinity Edge | — |
+| `bloodletters_curse` | Bloodletter's Curse | — |
+| `hexoptics_c44` | Hexoptics C44 | — |
+| `phantom_dancer` | Phantom Dancer | — |
+| `rapid_firecannon` | Rapid Firecannon | — |
+| `experimental_hexplate` | Experimental Hexplate | — |
+| `essence_reaver` | Essence Reaver | — |
+| `yun_tal_wildarrows` | Yun Tal Wildarrows | — |
+| `navori_flickerblade` | Navori Flickerblade | — |
+| `lord_dominiks_regards` | Lord Dominik's Regards | — |
+| `wits_end` | Wit's End | — |
+| `statikk_shiv` | Statikk Shiv | — |
+| `stormrazor` | Stormrazor | — |
+| `fiendhunter_bolts` | Fiendhunter Bolts | — |
 
-## Endpoints
+The live source of truth is `GET /api/items`.
 
-| Method and route | Purpose |
+### Rune paths
+
+Use these values in `builds[].runes.primary` and
+`builds[].runes.secondary`.
+
+| Key | Path |
 |---|---|
-| `GET /healthz` | Lightweight service-health response. |
-| `GET /api/bootstrap` | Items, runes, presets, champion data, and one target in a single response. |
-| `GET /api/champion` | Kayle base stats and default ability ranks for a level. |
-| `GET /api/items` | Current selectable item catalog and item keys. |
-| `GET /api/runes` | Rune paths, rune keys, shards, icons, and implementation status. |
-| `GET /api/enemy_presets` | Available target-preset keys. |
-| `GET /api/enemy_preset` | One target preset scaled to a level. |
-| `POST /api/simulate` | Validate and simulate one or more builds. |
+| `precision` | Precision |
+| `domination` | Domination |
+| `sorcery` | Sorcery |
+| `resolve` | Resolve |
+| `inspiration` | Inspiration |
 
-## Health
+### Runes
 
-Request:
+Use rune keys inside `builds[].runes.selected`. `Yes` in the Simulated column
+means the rune currently changes the combat result. Other runes are accepted
+and returned but are visual selections only.
 
-```http
-GET /healthz
-```
+| Path | Key | Rune | Simulated |
+|---|---|---|---|
+| Precision | `press_the_attack` | Press the Attack | Yes |
+| Precision | `lethal_tempo` | Lethal Tempo | Yes |
+| Precision | `fleet_footwork` | Fleet Footwork | Yes |
+| Precision | `conqueror` | Conqueror | Yes |
+| Precision | `absorb_life` | Absorb Life | No |
+| Precision | `triumph` | Triumph | No |
+| Precision | `presence_of_mind` | Presence of Mind | No |
+| Precision | `legend_alacrity` | Legend: Alacrity | Yes |
+| Precision | `legend_haste` | Legend: Haste | Yes |
+| Precision | `legend_bloodline` | Legend: Bloodline | No |
+| Precision | `coup_de_grace` | Coup de Grace | Yes |
+| Precision | `cut_down` | Cut Down | Yes |
+| Precision | `last_stand` | Last Stand | Yes |
+| Domination | `electrocute` | Electrocute | Yes |
+| Domination | `dark_harvest` | Dark Harvest | Yes |
+| Domination | `hail_of_blades` | Hail of Blades | Yes |
+| Domination | `cheap_shot` | Cheap Shot | Yes |
+| Domination | `taste_of_blood` | Taste of Blood | No |
+| Domination | `sudden_impact` | Sudden Impact | No |
+| Domination | `sixth_sense` | Sixth Sense | No |
+| Domination | `grisly_mementos` | Grisly Mementos | No |
+| Domination | `deep_ward` | Deep Ward | No |
+| Domination | `treasure_hunter` | Treasure Hunter | No |
+| Domination | `relentless_hunter` | Relentless Hunter | Yes |
+| Domination | `ultimate_hunter` | Ultimate Hunter | No |
+| Sorcery | `summon_aery` | Summon Aery | Yes |
+| Sorcery | `arcane_comet` | Arcane Comet | Yes |
+| Sorcery | `stormraiders_surge` | Stormraider's Surge | Yes |
+| Sorcery | `deathfire_touch` | Deathfire Touch | Yes |
+| Sorcery | `axiom_arcanist` | Axiom Arcanist | Yes |
+| Sorcery | `manaflow_band` | Manaflow Band | No |
+| Sorcery | `nimbus_cloak` | Nimbus Cloak | No |
+| Sorcery | `transcendence` | Transcendence | Yes |
+| Sorcery | `celerity` | Celerity | Yes |
+| Sorcery | `absolute_focus` | Absolute Focus | Yes |
+| Sorcery | `scorch` | Scorch | Yes |
+| Sorcery | `waterwalking` | Waterwalking | Yes |
+| Sorcery | `gathering_storm` | Gathering Storm | Yes |
+| Resolve | `grasp_of_the_undying` | Grasp of the Undying | Yes |
+| Resolve | `aftershock` | Aftershock | No |
+| Resolve | `guardian` | Guardian | No |
+| Resolve | `demolish` | Demolish | No |
+| Resolve | `font_of_life` | Font of Life | No |
+| Resolve | `shield_bash` | Shield Bash | No |
+| Resolve | `conditioning` | Conditioning | No |
+| Resolve | `second_wind` | Second Wind | No |
+| Resolve | `bone_plating` | Bone Plating | No |
+| Resolve | `overgrowth` | Overgrowth | No |
+| Resolve | `revitalize` | Revitalize | No |
+| Resolve | `unflinching` | Unflinching | No |
+| Inspiration | `glacial_augment` | Glacial Augment | No |
+| Inspiration | `unsealed_spellbook` | Unsealed Spellbook | No |
+| Inspiration | `first_strike` | First Strike | Yes |
+| Inspiration | `hextech_flashtraption` | Hextech Flashtraption | No |
+| Inspiration | `magical_footwear` | Magical Footwear | Yes |
+| Inspiration | `cash_back` | Cash Back | No |
+| Inspiration | `triple_tonic` | Triple Tonic | No |
+| Inspiration | `time_warp_tonic` | Time Warp Tonic | No |
+| Inspiration | `biscuit_delivery` | Biscuit Delivery | No |
+| Inspiration | `cosmic_insight` | Cosmic Insight | No |
+| Inspiration | `approach_velocity` | Approach Velocity | Yes |
+| Inspiration | `jack_of_all_trades` | Jack of All Trades | Yes |
 
-Response:
+The live source of truth is `GET /api/runes`.
+
+### Stat shards
+
+Select one key from each row and keep them in row order.
+
+| Row | Key | Shard | Simulated |
+|---|---|---|---|
+| Offense | `adaptive` | Adaptive Force | Yes |
+| Offense | `attack_speed` | Attack Speed | Yes |
+| Offense | `haste` | Ability Haste | Yes |
+| Flex | `adaptive` | Adaptive Force | Yes |
+| Flex | `move_speed` | Movement Speed | Yes |
+| Flex | `health_scaling` | Scaling Health | Yes |
+| Defense | `health` | Health | Yes |
+| Defense | `tenacity` | Tenacity and Slow Resist | No |
+| Defense | `health_scaling` | Scaling Health | Yes |
+
+### Enemy presets
+
+| Key | Preset |
+|---|---|
+| `dummy` | Target Dummy |
+| `squishy` | Squishy average: Marksman and Mage |
+| `average` | All-champion average |
+| `tank` | Tank and Fighter average |
+
+Use preset keys with `GET /api/enemy_preset`. A POST payload sends the returned
+enemy numbers, not the preset key itself.
+
+### Combo actions
+
+| Action | Payload object |
+|---|---|
+| Basic attack | `{ "type": "AA" }` |
+| Q | `{ "type": "Q" }` |
+| W | `{ "type": "W" }` |
+| E | `{ "type": "E" }` |
+| R | `{ "type": "R" }` |
+| Wait | `{ "type": "WAIT", "duration": 0.5 }` |
+| Item active | `{ "type": "ITEM_ACTIVE", "item": "hextech_gunblade" }` |
+
+The wait duration is measured in seconds. Use only the unified E action. Active
+item keys must come from the Active action column in the item table.
+
+## GET structure
+
+### Endpoint summary
+
+| Request | Response |
+|---|---|
+| `GET /healthz` | Service status object |
+| `GET /api/items` | Array of item objects |
+| `GET /api/runes` | Rune paths and shard rows |
+| `GET /api/champion?level=18` | Kayle stats and default ability ranks |
+| `GET /api/enemy_presets` | Array of preset descriptions |
+| `GET /api/enemy_preset?preset=average&level=18` | One calculated enemy object |
+| `GET /api/bootstrap?level=18&preset=dummy` | All initial UI catalogs and setup data |
+
+### `GET /healthz`
 
 ```json
 {
@@ -70,108 +220,27 @@ Response:
 }
 ```
 
-## Catalog discovery
-
-### Bootstrap
-
-```http
-GET /api/bootstrap?level=18&preset=dummy
-```
-
-The response combines the data normally obtained from the item, rune,
-champion, enemy-preset, and selected-enemy endpoints:
+### `GET /api/items`
 
 ```json
-{
-  "items": [],
-  "runes": {
-    "paths": [],
-    "shards": []
-  },
-  "enemy_presets": [],
-  "champion": {
+[
+  {
+    "key": "nashors_tooth",
+    "id": 3115,
+    "name": "Nashor's Tooth",
+    "cost": 2900,
     "stats": {},
-    "default_ranks": {
-      "Q": 5,
-      "W": 5,
-      "E": 5,
-      "R": 3
-    }
-  },
-  "enemy": {}
-}
-```
-
-Query values:
-
-```text
-level  = 1..20; invalid GET values are clamped or replaced by the default
-preset = a key returned by GET /api/enemy_presets
-```
-
-### Champion
-
-```http
-GET /api/champion?level=6
-```
-
-```json
-{
-  "stats": {
-    "level": 6,
-    "base_ad": 59.875,
-    "base_as": 0.625,
-    "as_ratio": 0.667
-  },
-  "default_ranks": {
-    "Q": 3,
-    "W": 1,
-    "E": 1,
-    "R": 1
+    "tags": [],
+    "passive_text": "...",
+    "icon": "icons/3115.png?v=...",
+    "icon_fallback": "https://...",
+    "has_active": false,
+    "active_kind": null
   }
-}
+]
 ```
 
-The actual `stats` object contains the complete champion stat response, not
-only the abbreviated fields shown above.
-
-### Items
-
-```http
-GET /api/items
-```
-
-Each entry has this shape:
-
-```json
-{
-  "key": "berserkers_greaves",
-  "id": 3006,
-  "name": "Berserker's Greaves",
-  "cost": 1100,
-  "stats": {
-    "attack_speed": 25,
-    "move_speed_flat": 45
-  },
-  "tags": ["boots"],
-  "passive_text": "...",
-  "icon": "icons/3006.png?v=...",
-  "icon_fallback": "https://...",
-  "has_active": false,
-  "active_kind": null
-}
-```
-
-Submit the `key`, never the numeric `id`. Active items expose
-`has_active: true`; their key may also be used in an `ITEM_ACTIVE` action.
-
-### Runes and shards
-
-```http
-GET /api/runes
-```
-
-Abbreviated response:
+### `GET /api/runes`
 
 ```json
 {
@@ -213,37 +282,153 @@ Abbreviated response:
 }
 ```
 
-Rune path keys are:
+### `GET /api/champion`
 
-```text
-precision
-domination
-sorcery
-resolve
-inspiration
+```json
+{
+  "stats": {
+    "level": 18,
+    "hp": 2234.0,
+    "mana": 1180.0,
+    "base_ad": 92.5,
+    "armor": 97.4,
+    "mr": 44.1,
+    "level_bonus_as": 25.5,
+    "base_as": 0.625,
+    "as_ratio": 0.667,
+    "windup_percent": 0.19355
+  },
+  "default_ranks": {
+    "Q": 5,
+    "W": 5,
+    "E": 5,
+    "R": 3
+  }
+}
 ```
 
-`has_math` tells an API client whether the rune currently changes the combat
-calculation. Visual-only runes may still be submitted and echoed, but do not
-change the result.
+### `GET /api/enemy_presets`
 
-### Enemy presets
-
-```http
-GET /api/enemy_presets
-GET /api/enemy_preset?preset=average&level=18
+```json
+[
+  {
+    "key": "average",
+    "name": "All-champion average",
+    "scaling": true
+  }
+]
 ```
 
-Preset keys are obtained from the catalog rather than hard-coded. The second
-endpoint returns a target object suitable for the `enemy` field of a
-simulation request.
+### `GET /api/enemy_preset`
 
-## Build a simulation payload
+```json
+{
+  "hp": 2383.9,
+  "bonus_hp": 0.0,
+  "armor": 106.8,
+  "mr": 59.3,
+  "name": "All-champion average"
+}
+```
 
-All builds in one request share champion level, ability ranks, enemy, combo,
-and scenario options. Each build supplies its own items and rune page.
+### `GET /api/bootstrap`
 
-Complete example:
+```json
+{
+  "items": [],
+  "runes": {
+    "paths": [],
+    "shards": []
+  },
+  "enemy_presets": [],
+  "champion": {
+    "stats": {},
+    "default_ranks": {}
+  },
+  "enemy": {}
+}
+```
+
+## Build the POST payload
+
+The payload has six top-level fields:
+
+| Field | Value |
+|---|---|
+| `level` | Kayle level |
+| `ability_ranks` | Q, W, E, and R ranks |
+| `enemy` | Target HP and resistances |
+| `builds` | Item and rune setups to compare |
+| `combo` | Ordered actions from the action table |
+| `options` | Shared scenario state |
+
+### Enemy structure
+
+```json
+{
+  "hp": 1000,
+  "current_hp": 1000,
+  "bonus_hp": 0,
+  "armor": 30,
+  "mr": 30
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `hp` | Maximum HP used for percentage thresholds |
+| `current_hp` | Starting HP used for missing-health effects |
+| `bonus_hp` | Target bonus HP used by effects such as Giant Slayer |
+| `armor` | Target armor |
+| `mr` | Target magic resistance |
+
+### Build structure
+
+Use item, rune-path, rune, and shard keys from the tables above.
+
+```json
+{
+  "name": "Nashor Berserker",
+  "items": [
+    "nashors_tooth",
+    "berserkers_greaves"
+  ],
+  "runes": {
+    "primary": "precision",
+    "secondary": "sorcery",
+    "selected": [
+      "fleet_footwork",
+      "legend_alacrity"
+    ],
+    "shards": [
+      "attack_speed",
+      "adaptive",
+      "health"
+    ]
+  }
+}
+```
+
+Empty item slots are omitted instead of being sent as `null`. Numeric item and
+rune IDs are rejected.
+
+### Options
+
+| Key | Default | Accepted value |
+|---|---:|---|
+| `game_time_min` | `25` | `0..1000` |
+| `kayle_hp_pct` | `100` | `0..100` |
+| `dh_souls` | `0` | Whole number from `0..10000` |
+| `dark_seal_stacks` | `0` | Whole number from `0..10` |
+| `legend_stacks` | `10` | Whole number from `0..10` |
+| `relentless_stacks` | `0` | Whole number from `0..5` |
+| `pre_stacked_zeal` | `true` | Boolean |
+| `pre_stacked_rageblade` | `false` | Boolean |
+| `pre_stacked_yun_tal` | `true` | Boolean |
+| `fleet_starts_energized` | `true` | Boolean |
+| `assume_river` | `false` | Boolean |
+
+### Complete payload
 
 ```json
 {
@@ -307,219 +492,14 @@ Complete example:
 }
 ```
 
-### Top-level fields
+Send it to:
 
-| Field | Meaning |
-|---|---|
-| `level` | Kayle's champion level. |
-| `ability_ranks` | Explicit Q/W/E/R ranks. Omit to use the documented default skill order. |
-| `enemy` | Maximum HP, starting HP, bonus HP, armor, and magic resistance. |
-| `builds` | Builds compared under the shared scenario. |
-| `combo` | Ordered actions executed for every build. |
-| `options` | Shared pre-combat and scenario state. |
-
-Every top-level section is syntactically optional:
-
-```text
-level             = 18 when omitted
-ability_ranks     = Kayle's default skill order when omitted
-builds            = [] when omitted
-combo             = [] when omitted
-enemy and options = defaults documented below
+```http
+POST /api/simulate
+Content-Type: application/json
 ```
 
-Empty builds or combo arrays produce an empty comparison rather than a useful
-combat result. If `ability_ranks` is present but a specific ability is absent,
-that ability receives rank zero.
-
-Validation ranges:
-
-```text
-level                       = 1..20
-Q / W / E rank              = 0..5
-R rank                      = 0..3
-enemy maximum HP            = 1..10,000,000
-enemy current HP            = 0..maximum HP
-enemy bonus HP              = 0..10,000,000
-enemy armor / MR            = -10,000..100,000
-builds                      <= 8
-items per build             <= 6
-selected runes per build    <= 6
-shards per build            <= 3
-combo actions               <= 100
-build name                  <= 60 characters
-```
-
-All numeric values must be finite. Ability ranks are bounds-checked but may be
-set manually for isolation tests even when the rank distribution would be
-illegal in a normal match.
-
-### Enemy fields
-
-```json
-{
-  "hp": 3500,
-  "current_hp": 2100,
-  "bonus_hp": 1500,
-  "armor": 100,
-  "mr": 100
-}
-```
-
-The HP fields are intentionally separate:
-
-- `hp` is maximum HP and controls percentage thresholds.
-- `current_hp` is starting HP and controls missing-health effects.
-- `bonus_hp` is target bonus HP and is read by effects such as Giant Slayer.
-
-When omitted, the enemy defaults are:
-
-```text
-hp         = 3500
-current_hp = hp
-bonus_hp   = 0
-armor      = 100
-mr         = 100
-```
-
-### Build fields
-
-```json
-{
-  "name": "AP build",
-  "items": ["nashors_tooth", "rabadons_deathcap"],
-  "runes": {
-    "primary": "precision",
-    "secondary": "sorcery",
-    "selected": ["fleet_footwork", "legend_alacrity"],
-    "shards": ["attack_speed", "adaptive", "health"]
-  }
-}
-```
-
-Do not send empty item slots as `null`; omit them from the array. Item and rune
-keys are case-sensitive. `primary` and `secondary` document the page layout;
-`selected` determines which rune effects enter the simulation.
-
-`name`, `items`, and `runes` are individually optional. Their defaults are the
-generated build name, an empty item array, and an empty rune selection. Rune
-paths are optional metadata, while selected rune and shard arrays default to
-empty arrays.
-
-### Combo actions
-
-Basic attacks and abilities:
-
-```json
-[
-  { "type": "AA" },
-  { "type": "Q" },
-  { "type": "W" },
-  { "type": "E" },
-  { "type": "R" }
-]
-```
-
-Wait:
-
-```json
-{ "type": "WAIT", "duration": 0.5 }
-```
-
-```text
-WAIT duration = 0..60 seconds
-default        = 0.1 seconds
-```
-
-Item active:
-
-```json
-{ "type": "ITEM_ACTIVE", "item": "hextech_gunblade" }
-```
-
-The referenced item must exist in the same build and expose
-`has_active: true` in the item catalog. E uses one unified instant action; old
-`fast`, `waited`, or `delayed` timing variants are rejected.
-
-Cooldown-invalid actions still execute and add warnings. Automatically
-scheduled damage such as R impact, Stormsurge, Comet, burns, and Phantom Hit is
-resolved after the entered sequence without requiring a trailing wait.
-
-### Options
-
-Omitted options use engine defaults:
-
-```text
-game_time_min            = 25
-kayle_hp_pct             = 100
-dh_souls                 = 0
-dark_seal_stacks         = 0
-legend_stacks            = 10
-relentless_stacks        = 0
-pre_stacked_zeal         = true
-pre_stacked_rageblade    = false
-pre_stacked_yun_tal      = true
-fleet_starts_energized   = true
-assume_river             = false
-```
-
-Accepted ranges:
-
-```text
-game_time_min      = 0..1000
-kayle_hp_pct       = 0..100
-dh_souls           = 0..10,000 whole souls
-dark_seal_stacks   = 0..10 whole stacks
-legend_stacks      = 0..10 whole stacks
-relentless_stacks  = 0..5 whole stacks
-```
-
-Boolean options must be JSON booleans, not strings or numbers.
-
-## Send the request
-
-`curl` example:
-
-```bash
-curl -X POST "https://kayle-calculator.onrender.com/api/simulate" \
-  -H "Content-Type: application/json" \
-  --data-binary @payload.json
-```
-
-JavaScript example for same-origin use:
-
-```js
-const response = await fetch("/api/simulate", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(payload),
-});
-
-const data = await response.json();
-if (!response.ok) throw new Error(data.error);
-```
-
-Python standard-library example:
-
-```python
-import json
-from urllib.request import Request, urlopen
-
-body = json.dumps(payload).encode("utf-8")
-request = Request(
-    "https://kayle-calculator.onrender.com/api/simulate",
-    data=body,
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-
-with urlopen(request) as response:
-    result = json.load(response)
-```
-
-## Simulation response
-
-The top-level object contains one result for each submitted build:
+## POST response structure
 
 ```json
 {
@@ -527,31 +507,36 @@ The top-level object contains one result for each submitted build:
     {
       "build_name": "Nashor Berserker",
       "items": ["nashors_tooth", "berserkers_greaves"],
-      "runes": {
-        "primary": "precision",
-        "secondary": "sorcery",
-        "selected": ["fleet_footwork", "legend_alacrity"],
-        "shards": ["attack_speed", "adaptive", "health"]
-      },
-      "total_damage": 558.58,
-      "dps": 153.0,
-      "duration": 3.652,
-      "timeline_duration": 4.341,
-      "burst_damage_1s": 186.19,
-      "burst_window_1s": {
-        "start": 0.0,
-        "end": 1.0
-      },
-      "damage_window": {
-        "start": 0.0,
-        "end": 3.652
-      },
-      "totals": {
-        "physical": 276.35,
-        "magic": 282.23,
-        "true": 0.0
-      },
+      "runes": {},
       "stats": {},
+      "ranks": {},
+      "calculation_model": "full_precision_v1",
+      "critical_strike_model": "expected_damage",
+      "totals": {
+        "physical": 0,
+        "magic": 0,
+        "true": 0
+      },
+      "total_damage": 0,
+      "pre_mitigation_total": 0,
+      "mitigated_pct": 0,
+      "duration": 0,
+      "timeline_duration": 0,
+      "damage_window": {
+        "start": 0,
+        "end": 0
+      },
+      "dps": 0,
+      "burst_damage_1s": 0,
+      "burst_window_1s": {
+        "start": 0,
+        "end": 1
+      },
+      "attack_count": 0,
+      "kill_time": null,
+      "gold_cost": 0,
+      "damage_per_1k_gold": null,
+      "healing": 0,
       "enemy": {},
       "events": [],
       "warnings": []
@@ -560,90 +545,30 @@ The top-level object contains one result for each submitted build:
 }
 ```
 
-The numeric example is abbreviated and rounded like the API response. Use the
-live response rather than copying it as a future regression fixture.
+One result is returned for every submitted build. `events` contains the
+auditable damage timeline. The damage, DPS, and burst formulas are in the
+[README](../README.md#core-calculations).
 
-Important result fields:
-
-| Field | Meaning |
-|---|---|
-| `total_damage` | Sum of all full-precision applied damage instances. |
-| `totals` | Applied damage separated into physical, magic, and true damage. |
-| `dps` | Practice Tool-style first-to-last damage DPS. |
-| `duration` | DPS denominator; a single-timestamp combo uses the documented single-hit fallback. |
-| `timeline_duration` | Full action timeline including final recovery, retained for auditing. |
-| `burst_damage_1s` | Highest damage in any rolling one-second window. |
-| `burst_window_1s` | Winning burst-window timestamps. |
-| `damage_window` | First and last damage timestamps. |
-| `stats` | Final calculated build stats and penetration values. |
-| `enemy` | Maximum HP, bonus HP, remaining HP, and killed state. |
-| `events` | Auditable execution-order timeline. |
-| `warnings` | Cooldown conflicts, illegal item combinations, and unsupported rune math. |
-
-Damage events expose each calculation stage:
-
-```json
-{
-  "t": 0.0,
-  "source": "Basic attack",
-  "type": "physical",
-  "raw": 59.875,
-  "multiplier": 1.0,
-  "pre": 59.875,
-  "effective_resistance": 30.0,
-  "mitigation_multiplier": 0.769231,
-  "dealt": 46.0577,
-  "hp_before": 1000.0,
-  "hp_after": 953.9423
-}
-```
-
-Timeline notes omit damage-stage fields and use `type: "note"`. Healing events
-use `type: "heal"`.
-
-The DPS and burst formulas are specified in the
-[README core calculations](../README.md#core-calculations). Combat ordering and
-snapshot rules are specified in the [simulation model](MODEL.md).
-
-## Errors and public limits
-
-Errors use one safe JSON shape:
-
-```json
-{
-  "error": "human-readable validation message"
-}
-```
-
-| Status | Meaning |
-|---|---|
-| `400` | Invalid JSON content or validated field value. |
-| `411` | Missing or invalid `Content-Length`. |
-| `413` | Request body exceeds the public limit. |
-| `415` | Wrong content type or compressed request body. |
-| `429` | Per-client rate limit or process concurrency limit reached. |
-| `500` | Unexpected simulation failure; response includes a short reference. |
-
-Public resource limits:
+## Limits and errors
 
 ```text
-request body                   <= 256 KiB
-simulations                    <= 30 per client per minute
-concurrent simulations         = 2 by default
-configurable concurrency       = 1..4
-builds                         <= 8
-items per build                <= 6
-combo actions                  <= 100
+builds                      <= 8
+items per build             <= 6
+selected runes per build    <= 6
+shards per build            <= 3
+combo actions               <= 100
+one WAIT                    <= 60 seconds
+request body                <= 256 KiB
+requests                    <= 30 simulations per client per minute
 ```
 
-When a temporary limit is reached, respect the `Retry-After` response header.
+Errors return:
 
-## Compatibility notes
+```json
+{
+  "error": "validation message"
+}
+```
 
-- The API is currently unversioned and follows the deployed simulator model.
-- Catalog keys are the source of truth for payload identifiers.
-- Numeric Riot rune IDs were replaced by readable keys in public payloads.
-- Existing direct engine tests may still use numeric IDs internally; that is
-  not part of the HTTP contract.
-- The service can sleep on its hosting tier, so the first request after an idle
-  period may take longer.
+The live catalog endpoints are always the final source of truth if the tables
+and a newer deployment differ.
