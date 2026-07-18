@@ -74,11 +74,11 @@
         <select id="enemyPreset" class="wide"></select>
       </div>
       <div class="enemy-grid">
-        <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1"></label>
-        <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0"></label>
-        <label><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0"></label>
-        <label><span>Armor</span><input type="number" id="enemyArmor" value="100"></label>
-        <label><span>Magic resist</span><input type="number" id="enemyMr" value="100"></label>
+        <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1" max="10000000"></label>
+        <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0" max="10000000"></label>
+        <label><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0" max="10000000"></label>
+        <label><span>Armor</span><input type="number" id="enemyArmor" value="100" min="-10000" max="100000"></label>
+        <label><span>Magic resist</span><input type="number" id="enemyMr" value="100" min="-10000" max="100000"></label>
       </div>
     </section>
 
@@ -94,7 +94,7 @@
         <div class="enemy-grid">
           <label><span>Game time (min)</span><input type="number" id="gameTime" value="25" min="0" max="90"></label>
           <label><span>Kayle HP %</span><input type="number" id="kayleHp" value="100" min="1" max="100"></label>
-          <label><span>Dark Harvest souls</span><input type="number" id="dhSouls" value="0" min="0"></label>
+          <label><span>Dark Harvest souls</span><input type="number" id="dhSouls" value="0" min="0" max="10000"></label>
           <label id="darkSealStacksField" class="hidden"><span>Dark Seal Glory</span><input type="number" id="darkSealStacks" value="0" min="0" max="10"></label>
           <label><span>Legend stacks</span><input type="number" id="legendStacks" value="10" min="0" max="10"></label>
           <label><span>Relentless stacks</span><input type="number" id="relentlessStacks" value="0" min="0" max="5"></label>
@@ -123,7 +123,10 @@
         </div>
         <button id="addBuildBtn" class="secondary-btn">＋ Add build</button>
       </div>
-      <p class="section-description">Configure items and runes for each build you want to compare.</p>
+      <div class="section-description-row">
+        <p class="section-description">Configure items and runes for each build you want to compare.</p>
+        <span class="limit-status" id="buildLimitStatus" aria-live="polite">0 / 8 builds</span>
+      </div>
       <div id="buildsContainer" class="builds-container"></div>
     </section>
 
@@ -138,7 +141,10 @@
         </div>
         <button class="text-btn danger-text" id="clearComboBtn">Clear sequence</button>
       </div>
-      <p class="section-description">Click an action to append it. Drag actions to reproduce the exact order used in Practice Tool.</p>
+      <div class="section-description-row">
+        <p class="section-description">Click an action to append it. Drag actions to reproduce the exact order used in Practice Tool.</p>
+        <span class="limit-status" id="comboLimitStatus" aria-live="polite">0 / 100 actions</span>
+      </div>
       <div class="combo-palette" id="comboPalette"></div>
       <div class="combo-track" id="comboTrack" aria-label="Selected combo sequence">
         <span class="combo-empty">Add an action to begin the combo.</span>

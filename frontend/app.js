@@ -10,6 +10,10 @@ let RUNE_BY_ID = {};
 let PATH_BY_ID = {};
 let buildSeq = 0;
 
+const MAX_BUILDS = 8;
+const MAX_COMBO_ACTIONS = 100;
+const MAX_BUILD_NAME_LENGTH = 60;
+
 const state = {
   level: 18,
   ranks: { Q: 5, W: 5, E: 5, R: 3 },
@@ -20,6 +24,40 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function damageTypeClass(type) {
+  return ["physical", "magic", "true", "heal"].includes(type)
+    ? `type-${type}` : "type-heal";
+}
+
+function createItemImage(item, { lazy = false, title = "", onFailure = null } = {}) {
+  const img = document.createElement("img");
+  img.src = item.icon;
+  img.alt = item.name;
+  img.decoding = "async";
+  if (lazy) img.loading = "lazy";
+  if (title) img.title = title;
+  let usedFallback = false;
+  img.addEventListener("error", () => {
+    if (!usedFallback && item.icon_fallback) {
+      usedFallback = true;
+      img.src = item.icon_fallback;
+      return;
+    }
+    if (onFailure) onFailure(img);
+    else img.hidden = true;
+  });
+  return img;
+}
 
 /* ================= init ================= */
 
@@ -191,6 +229,7 @@ function defaultRunes() {
 }
 
 function addBuild() {
+  if (state.builds.length >= MAX_BUILDS) return;
   buildSeq += 1;
   state.builds.push({
     id: buildSeq,
@@ -217,6 +256,11 @@ function renderBuilds() {
   const box = $("buildsContainer");
   box.innerHTML = "";
   updateConditionalControls();
+  const atBuildLimit = state.builds.length >= MAX_BUILDS;
+  const addButton = $("addBuildBtn");
+  addButton.disabled = atBuildLimit;
+  addButton.title = atBuildLimit ? `Maximum ${MAX_BUILDS} builds reached` : "";
+  $("buildLimitStatus").textContent = `${state.builds.length} / ${MAX_BUILDS} builds`;
   if (!state.builds.length) {
     box.innerHTML = `<div class="empty-inline">No builds yet. Add a build to begin.</div>`;
     return;
@@ -231,8 +275,11 @@ function renderBuilds() {
     const nameInput = document.createElement("input");
     nameInput.className = "build-name";
     nameInput.value = b.name;
+    nameInput.maxLength = MAX_BUILD_NAME_LENGTH;
     nameInput.addEventListener("click", (e) => e.stopPropagation());
-    nameInput.addEventListener("input", () => (b.name = nameInput.value));
+    nameInput.addEventListener("input", () => {
+      b.name = nameInput.value.slice(0, MAX_BUILD_NAME_LENGTH);
+    });
     const runeBtn = document.createElement("button");
     runeBtn.className = "rune-btn";
     runeBtn.title = "Edit runes";
@@ -267,10 +314,22 @@ function renderBuilds() {
       slot.type = "button";
       slot.className = "slot" + (key ? " filled" : "");
       slot.title = key ? ITEM_BY_KEY[key].name : "Add item";
-      slot.innerHTML = key
-        ? `<img src="${ITEM_BY_KEY[key].icon}" alt="${ITEM_BY_KEY[key].name}" decoding="async"
-              onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${ITEM_BY_KEY[key].icon_fallback}'}else{this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ITEM_BY_KEY[key].name.slice(0, 2)}',className:'plus'}))}">`
-        : `<span class="plus">+</span>`;
+      if (key) {
+        const item = ITEM_BY_KEY[key];
+        slot.appendChild(createItemImage(item, {
+          onFailure: (failedImage) => {
+            const fallback = document.createElement("span");
+            fallback.className = "plus";
+            fallback.textContent = item.name.slice(0, 2);
+            failedImage.replaceWith(fallback);
+          },
+        }));
+      } else {
+        const plus = document.createElement("span");
+        plus.className = "plus";
+        plus.textContent = "+";
+        slot.appendChild(plus);
+      }
       slot.addEventListener("click", () => openOverlay(b.id, idx));
       slots.appendChild(slot);
     });
@@ -310,12 +369,17 @@ function openOverlay(buildId, slotIdx) {
         ? `${v * 100}%` : v;
       return `${val} ${label}`;
     }).join(" · ");
-    tile.innerHTML = `
-      <img src="${it.icon}" alt="${it.name}" loading="lazy" decoding="async"
-        onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${it.icon_fallback}'}else{this.style.visibility='hidden'}">
-      <span class="iname">${it.name}</span>
-      <span class="icost">${it.cost.toLocaleString()} g</span>
-      <span class="istats">${statBits}</span>`;
+    const image = createItemImage(it, { lazy: true });
+    const name = document.createElement("span");
+    name.className = "iname";
+    name.textContent = it.name;
+    const cost = document.createElement("span");
+    cost.className = "icost";
+    cost.textContent = `${it.cost.toLocaleString()} g`;
+    const stats = document.createElement("span");
+    stats.className = "istats";
+    stats.textContent = statBits;
+    tile.append(image, name, cost, stats);
     tile.title = it.passive_text;
     tile.addEventListener("click", () => setSlot(it.key));
     grid.appendChild(tile);
@@ -546,6 +610,7 @@ function baseActionDef(action) {
 function renderPalette() {
   const pal = $("comboPalette");
   pal.innerHTML = "";
+  const atLimit = state.combo.length >= MAX_COMBO_ACTIONS;
   const actions = [
     ...BASE_ACTIONS.map((a) => ({
       type: a.type,
@@ -557,18 +622,16 @@ function renderPalette() {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = `chip palette-chip ${chipClass(action)}`;
-    chip.draggable = true;
+    chip.disabled = atLimit;
+    chip.draggable = !atLimit;
     if (action.type === "ITEM_ACTIVE") {
-      const img = document.createElement("img");
-      img.src = ITEM_BY_KEY[action.item].icon;
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.onerror = () => (img.style.display = "none");
-      chip.appendChild(img);
+      chip.appendChild(createItemImage(ITEM_BY_KEY[action.item], { lazy: true }));
     }
     chip.append(chipLabel(action));
-    chip.title = "Click to append · drag into the sequence";
-    chip.addEventListener("click", () => { state.combo.push({ ...action }); renderCombo(); });
+    chip.title = atLimit
+      ? `Maximum ${MAX_COMBO_ACTIONS} actions reached`
+      : "Click to append · drag into the sequence";
+    chip.addEventListener("click", () => appendComboAction(action));
     chip.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", JSON.stringify({ from: "palette", action }));
     });
@@ -587,12 +650,7 @@ function renderCombo() {
     chip.className = `chip ${chipClass(action)}`;
     chip.draggable = true;
     if (action.type === "ITEM_ACTIVE") {
-      const img = document.createElement("img");
-      img.src = ITEM_BY_KEY[action.item].icon;
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.onerror = () => (img.style.display = "none");
-      chip.appendChild(img);
+      chip.appendChild(createItemImage(ITEM_BY_KEY[action.item], { lazy: true }));
     }
     chip.append(shortLabel(action));
     const x = document.createElement("span");
@@ -627,6 +685,24 @@ function renderCombo() {
     e.preventDefault();
     handleDrop(e, state.combo.length);
   };
+
+  const atLimit = state.combo.length >= MAX_COMBO_ACTIONS;
+  const status = $("comboLimitStatus");
+  status.textContent = `${state.combo.length} / ${MAX_COMBO_ACTIONS} actions`;
+  status.classList.toggle("at-limit", atLimit);
+  document.querySelectorAll(".palette-chip").forEach((chip) => {
+    chip.disabled = atLimit;
+    chip.draggable = !atLimit;
+    chip.title = atLimit
+      ? `Maximum ${MAX_COMBO_ACTIONS} actions reached`
+      : "Click to append · drag into the sequence";
+  });
+}
+
+function appendComboAction(action) {
+  if (state.combo.length >= MAX_COMBO_ACTIONS) return;
+  state.combo.push({ ...action });
+  renderCombo();
 }
 
 function shortLabel(action) {
@@ -642,8 +718,16 @@ function handleDrop(e, targetIdx) {
   let data;
   try { data = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
   if (data.from === "palette") {
+    if (state.combo.length >= MAX_COMBO_ACTIONS) return;
+    const validBaseAction = data.action
+      && BASE_ACTIONS.some((item) => item.type === data.action.type);
+    const validItemAction = data.action?.type === "ITEM_ACTIVE"
+      && ITEM_BY_KEY[data.action.item]?.has_active;
+    if (!validBaseAction && !validItemAction) return;
     state.combo.splice(targetIdx, 0, { ...data.action });
   } else if (data.from === "track") {
+    if (!Number.isInteger(data.index)
+        || data.index < 0 || data.index >= state.combo.length) return;
     const [moved] = state.combo.splice(data.index, 1);
     if (data.index < targetIdx) targetIdx -= 1;
     state.combo.splice(targetIdx, 0, moved);
@@ -704,7 +788,12 @@ async function simulate() {
     if (data.error) throw new Error(data.error);
     renderResults(data.results);
   } catch (err) {
-    $("resultsContainer").innerHTML = `<p class="warn">Simulation failed: ${err.message}</p>`;
+    const results = $("resultsContainer");
+    results.replaceChildren();
+    const warning = document.createElement("p");
+    warning.className = "warn";
+    warning.textContent = `Simulation failed: ${err.message}`;
+    results.appendChild(warning);
   } finally {
     btn.disabled = false;
     btn.textContent = "Calculate damage";
@@ -729,10 +818,6 @@ function renderResults(results) {
     const isBest = r.dps === bestDps && results.length > 1;
     card.className = "result-card" + (isBest ? " is-best" : "");
 
-    const icons = r.items.map((k) =>
-      `<img src="${ITEM_BY_KEY[k].icon}" title="${ITEM_BY_KEY[k].name}" loading="lazy" decoding="async"
-        onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${ITEM_BY_KEY[k].icon_fallback}'}else{this.style.visibility='hidden'}">`).join("");
-
     const t = r.totals;
     const total = Math.max(r.total_damage, 0.001);
     const pct = (x) => (100 * x / total).toFixed(1);
@@ -749,7 +834,7 @@ function renderResults(results) {
     }
     const rows = Object.values(bySource).sort((a, b) => b.dealt - a.dealt).map((s) => `
       <tr>
-        <td class="type-${s.type}">${s.source}</td>
+        <td class="${damageTypeClass(s.type)}">${escapeHtml(s.source)}</td>
         <td>${s.hits}</td>
         <td>${fmtDamage(s.dealt)}</td>
         <td>${s.type === "heal" ? "—" : pct(s.dealt) + "%"}</td>
@@ -760,11 +845,11 @@ function renderResults(results) {
       .map((e, i) => ({ ...e, i }))
       .sort((a, b) => (a.t - b.t) || (a.i - b.i))
       .map((e) => e.type === "note"
-        ? `<tr><td>${e.t.toFixed(2)}s</td><td colspan="5" class="type-heal">${e.source}</td></tr>`
+        ? `<tr><td>${e.t.toFixed(2)}s</td><td colspan="5" class="type-heal">${escapeHtml(e.source)}</td></tr>`
         : `<tr>
             <td>${e.t.toFixed(2)}s</td>
-            <td class="type-${e.type}">${e.source}</td>
-            <td>${e.type}</td>
+            <td class="${damageTypeClass(e.type)}">${escapeHtml(e.source)}</td>
+            <td>${escapeHtml(e.type)}</td>
             <td>${e.raw === undefined ? "—" : fmtDamage(e.raw)}</td>
             <td>${e.effective_resistance === undefined || e.effective_resistance === null
               ? "—" : fmtDamage(e.effective_resistance)}</td>
@@ -774,8 +859,8 @@ function renderResults(results) {
     card.innerHTML = `
       <div class="result-card-head">
         <div class="result-title">
-          <h3>${r.build_name}</h3>
-          <span class="result-icons">${icons}</span>
+          <h3>${escapeHtml(r.build_name)}</h3>
+          <span class="result-icons"></span>
         </div>
         ${isBest ? '<span class="best-badge">Top DPS</span>' : ""}
       </div>
@@ -821,7 +906,7 @@ function renderResults(results) {
         <span class="v">${r.enemy.killed ? "DEAD" : fmtDamage(r.enemy.remaining_hp) + ` (${hpPct}%)`}</span>
       </div>
       <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
-      ${r.warnings.map((w) => `<p class="warn">Warning: ${w}</p>`).join("")}
+      ${r.warnings.map((w) => `<p class="warn">Warning: ${escapeHtml(w)}</p>`).join("")}
       <details class="breakdown" open>
         <summary>Damage timeline (execution order)</summary>
         <div class="timeline-scroll">
@@ -838,6 +923,14 @@ function renderResults(results) {
           ${rows}
         </table>
       </details>`;
+    const iconHost = card.querySelector(".result-icons");
+    for (const key of r.items) {
+      const item = ITEM_BY_KEY[key];
+      if (item) iconHost.appendChild(createItemImage(item, {
+        lazy: true,
+        title: item.name,
+      }));
+    }
     box.appendChild(card);
   }
 }

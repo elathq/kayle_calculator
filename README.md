@@ -35,6 +35,28 @@ If icon content changes, update `ICON_VERSION` once in
 `backend/data/__init__.py` so existing browsers receive the new files
 immediately.
 
+### Security and resource limits
+
+The public UI and simulation API both enforce bounded workloads. A simulation
+may contain at most 8 builds, 6 items per build, and 100 combo actions. Build
+names are limited to 60 characters, individual waits to 60 seconds, and all
+numeric inputs must be finite and stay inside documented gameplay-safe ranges.
+The UI disables adding a ninth build or a 101st action; the API independently
+rejects bypass attempts.
+
+`POST /api/simulate` additionally has a 256 KiB request-body limit, a rolling
+limit of 30 simulations per client per minute, and a process-wide concurrency
+limit. The concurrency limit defaults to 2 and can be set from 1 to 4 with the
+`MAX_CONCURRENT_SIMULATIONS` environment variable. When a limit is reached the
+API returns `413` or `429` instead of accepting unbounded work.
+
+Every response includes a restrictive Content Security Policy and defensive
+browser headers. Public errors omit tracebacks and framework versions, while
+the server logs a short reference ID for diagnosis. Keep deployment secrets in
+the Render dashboard rather than source files; `.env` files, local virtual
+environments, editor settings, and generated caches are excluded by
+`.gitignore`.
+
 Render Free web services spin down after 15 minutes without inbound traffic
 and can take about a minute to wake. Render's supported always-on option is a
 paid service instance; paid instances do not spin down. An external uptime
