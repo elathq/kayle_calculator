@@ -37,7 +37,22 @@ scope belong in the [simulation model](MODEL.md).
 | A new mutually exclusive shop family | Yes, once, to register the new family |
 
 The frontend item picker is automatic. Adding a valid catalog entry makes it
-selectable without editing HTML or JavaScript.
+selectable without editing HTML or JavaScript. Its tab is inferred from the
+catalog data:
+
+```text
+tag: starter          -> Starter Item only
+tag: boots            -> Boots only
+AP stat               -> AP
+AD stat               -> AD
+both AP and AD stats  -> AP and AD
+neither AP nor AD     -> AD
+```
+
+Hextech Gunblade is the deliberate AP-only hybrid exception. Guinsoo's
+Rageblade and Statikk Shiv appear in both AP and AD. Exceptional future item
+placement is configured in `itemPickerTabs()` in `frontend/app.js`; it does not
+require an engine change.
 
 ## Required fields
 

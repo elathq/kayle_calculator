@@ -732,6 +732,7 @@ details.breakdown summary {
   background: rgba(3, 7, 10, .82);
 }
 .overlay.hidden { display: none; }
+#itemOverlay { align-items: flex-start; }
 #darkSealStacksField.hidden { display: none; }
 .overlay-box {
   width: min(760px, 96vw);
@@ -767,7 +768,52 @@ details.breakdown summary {
 }
 .close-btn:hover { background: rgba(210, 105, 105, .1); color: var(--danger); }
 
-.item-box { width: min(900px, 96vw); }
+.item-box {
+  width: min(900px, 96vw);
+  scrollbar-gutter: stable;
+}
+.item-tabs {
+  position: sticky;
+  top: 61px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px 18px 0;
+  border-bottom: 1px solid var(--line);
+  background: rgba(16, 23, 30, .98);
+}
+.item-tab {
+  position: relative;
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.15;
+  transition: color .16s ease, background .16s ease;
+}
+.item-tab::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+}
+.item-tab:hover { background: var(--surface-raised); color: var(--text-soft); }
+.item-tab.active { color: var(--gold-bright); }
+.item-tab.active::after { background: var(--gold); }
+.item-tab:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: -3px;
+}
 .item-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

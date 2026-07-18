@@ -20,6 +20,7 @@ code transparency, and review of the simulator's formulas and evidence.
 ## What it provides
 
 - Side-by-side build comparison with independent items, runes, and shards.
+- Item selection grouped into Starter Item, Boots, AP, and AD tabs.
 - A drag-and-drop attack, ability, and item-active sequence.
 - Target HP, bonus HP, armor, and magic-resistance controls.
 - A full timeline with raw, resisted, and applied damage.

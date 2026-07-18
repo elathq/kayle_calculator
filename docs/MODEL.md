@@ -204,7 +204,18 @@ impact time = cast start + 2.5 s
 ```
 
 The combo continues after the cast completes. Delayed R damage and other queued
-effects resolve even after the last entered action.
+effects resolve even after the last entered action. The selected combo labels
+the action as `R cast`; the result timeline records the cast separately from
+the damage event.
+
+```text
+short sequence example:
+R cast                 = 0.00 s
+following attack       = 0.50 s
+entered actions end    ≈ 1.50 s
+R damage               = 2.50 s
+timeline duration      = 2.50 s
+```
 
 ## Attack event order
 

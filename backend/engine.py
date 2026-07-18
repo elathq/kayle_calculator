@@ -1576,6 +1576,13 @@ class Simulation:
         if (m := self._rune(8224)):    # Axiom Arcanist (R is AoE → 8%)
             dmg *= 1 + m["amp_aoe"]
         impact = self.time + R["impact_delay"]
+        self.events.append({
+            "t": round(self.time, 3),
+            "source": (
+                "Divine Judgment cast: damage lands "
+                f"at t={impact:.2f}s (+{R['impact_delay']:.2f}s)"),
+            "type": "note", "pre": 0, "dealt": 0,
+        })
 
         if self.has_fiendhunter:
             opening = ITEMS["fiendhunter_bolts"]["opening_barrage"]
@@ -1697,8 +1704,10 @@ class Simulation:
             sync_time = max(self.time, self.fleet_pending_at)
             self._activate_pending_fleet(sync_time)
         # Let delayed effects resolve even when the user sequence has already
-        # ended. This includes Stormsurge Squall, R impact, Phantom/D&D
-        # repeats, Comet/Scorch, and Deathfire ticks; no manual WAIT is needed.
+        # ended. In particular, an R cast at t=0 still lands at t=2.5 even if
+        # the entered actions finish around t=1.5. This also includes
+        # Stormsurge Squall, Phantom/D&D repeats, Comet/Scorch, and Deathfire
+        # ticks; no manual WAIT is needed.
         self._flush_scheduled(1e9)
         self._refresh_dynamic_stats(self.time)
 

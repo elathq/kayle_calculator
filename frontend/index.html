@@ -183,7 +183,13 @@
         <button class="close-btn" id="closeOverlayBtn" aria-label="Close item picker">×</button>
       </div>
     </div>
-    <div class="item-grid" id="itemGrid"></div>
+    <div class="item-tabs" id="itemTabs" role="tablist" aria-label="Item types">
+      <button class="item-tab" type="button" role="tab" data-item-tab="starter">Starter Item</button>
+      <button class="item-tab" type="button" role="tab" data-item-tab="boots">Boots</button>
+      <button class="item-tab" type="button" role="tab" data-item-tab="ap">AP</button>
+      <button class="item-tab" type="button" role="tab" data-item-tab="ad">AD</button>
+    </div>
+    <div class="item-grid" id="itemGrid" role="tabpanel"></div>
   </div>
 </div>
 

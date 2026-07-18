@@ -126,6 +126,12 @@ async function init() {
   $("simulateBtn").addEventListener("click", simulate);
   $("closeOverlayBtn").addEventListener("click", closeOverlay);
   $("clearSlotBtn").addEventListener("click", () => { setSlot(null); });
+  $("itemTabs").addEventListener("click", (e) => {
+    const tab = e.target.closest("[data-item-tab]");
+    if (!tab) return;
+    activeItemTab = tab.dataset.itemTab;
+    renderItemPicker();
+  });
   $("itemOverlay").addEventListener("click", (e) => {
     if (e.target === $("itemOverlay")) closeOverlay();
   });
@@ -364,12 +370,43 @@ function updateConditionalControls() {
 /* ================= item overlay ================= */
 
 let overlayTarget = null;       // {buildId, slotIdx}
+let activeItemTab = "starter";
+
+function itemPickerTabs(item) {
+  if (item.tags.includes("starter")) return ["starter"];
+  if (item.tags.includes("boots")) return ["boots"];
+
+  // Gunblade is intentionally presented as AP-only. Other hybrid items,
+  // including Rageblade, appear in both tabs when they grant both stats.
+  if (item.key === "hextech_gunblade") return ["ap"];
+
+  const tabs = [];
+  if (item.stats.ap) tabs.push("ap");
+  if (item.stats.ad) tabs.push("ad");
+  if (!tabs.length) tabs.push("ad");
+  return tabs;
+}
 
 function openOverlay(buildId, slotIdx) {
   overlayTarget = { buildId, slotIdx };
+  activeItemTab = "starter";
+  renderItemPicker();
+  $("itemOverlay").classList.remove("hidden");
+}
+
+function renderItemPicker() {
+  document.querySelectorAll("[data-item-tab]").forEach((tab) => {
+    const selected = tab.dataset.itemTab === activeItemTab;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  });
+
   const grid = $("itemGrid");
   grid.innerHTML = "";
-  for (const it of ITEMS) {
+  const visibleItems = ITEMS.filter((it) =>
+    itemPickerTabs(it).includes(activeItemTab));
+  for (const it of visibleItems) {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "item-tile";
@@ -399,7 +436,6 @@ function openOverlay(buildId, slotIdx) {
     tile.addEventListener("click", () => setSlot(it.key));
     grid.appendChild(tile);
   }
-  $("itemOverlay").classList.remove("hidden");
 }
 
 function setSlot(key) {
@@ -748,6 +784,7 @@ function shortLabel(action) {
     return name.split(" ")[0] + " ⚡";
   }
   if (action.type === "E" && action.timing === "delayed") return "E wait";
+  if (action.type === "R") return "R cast";
   return action.type;
 }
 
@@ -921,6 +958,7 @@ function renderResults(results) {
       <div class="stat-rows">
         <span class="k">Pre-mitigation</span><span class="v">${fmtDamage(r.pre_mitigation_total)} (−${r.mitigated_pct}%)</span>
         <span class="k">Attacks / DPS window</span><span class="v">${r.attack_count} in ${r.duration.toFixed(2)}s</span>
+        <span class="k">Timeline duration</span><span class="v">${r.timeline_duration.toFixed(2)}s</span>
         <span class="k">Peak 1s window</span>
         <span class="v">${r.burst_window_1s.start !== null
           ? r.burst_window_1s.start.toFixed(2) + "–" + r.burst_window_1s.end.toFixed(2) + "s"

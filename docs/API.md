@@ -546,7 +546,10 @@ Content-Type: application/json
 ```
 
 One result is returned for every submitted build. `events` contains the
-auditable damage timeline. The damage, DPS, and burst formulas are in the
+auditable damage timeline, including non-damage notes such as the R cast and
+its scheduled impact time. `duration` is the Practice Tool damage window;
+`timeline_duration` includes later queued effects such as Divine Judgment.
+The damage, DPS, and burst formulas are in the
 [README](../README.md#core-calculations).
 
 ## Limits and errors

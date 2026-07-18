@@ -59,6 +59,21 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertEqual(
             result["burst_window_1s"], {"start": 0.75, "end": 1.75})
 
+    def test_r_lands_after_2_5_seconds_when_short_combo_ends_first(self):
+        result = simulate([{"type": "R"}, {"type": "AA"}])
+        r_cast = next(event for event in result["events"]
+                      if event["source"].startswith("Divine Judgment cast"))
+        r_damage = next(event for event in result["events"]
+                        if event["source"] == "R — Divine Judgment")
+        first_attack = next(event for event in result["events"]
+                            if event["source"] == "Basic attack")
+
+        self.assertEqual(r_cast["t"], 0.0)
+        self.assertEqual(first_attack["t"], 0.5)
+        self.assertEqual(r_damage["t"], 2.5)
+        self.assertEqual(result["damage_window"]["end"], 2.5)
+        self.assertEqual(result["timeline_duration"], 2.5)
+
     def test_damage_event_contains_auditable_stages(self):
         event = simulate([{"type": "AA"}])["events"][0]
         self.assertEqual(event["source"], "Basic attack")
