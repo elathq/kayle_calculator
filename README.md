@@ -10,6 +10,15 @@ Riot Games. The implementation is validated against controlled Practice Tool
 measurements where possible; source-backed assumptions and unresolved limits
 are documented instead of being presented as confirmed game behavior.
 
+## Use the calculator
+
+Use the hosted application at
+**[kayle-calculator.onrender.com](https://kayle-calculator.onrender.com/)**.
+
+No local installation is required. This GitHub repository is published for
+documentation, implementation transparency, and review of the simulator's
+formulas and evidence; the hosted website is the intended user interface.
+
 ## What it provides
 
 - Up to 8 builds compared in one simulation, with 6 items per build.
@@ -59,33 +68,6 @@ Current documentation snapshot:
 The calculator is not automatically synchronized to live League patches. A
 source review, implementation update, regression run, and affected Practice
 Tool isolation are required before claiming support for a changed patch.
-
-## Quick start
-
-Requirements: Python 3.10 or newer. The application itself has no third-party
-runtime dependencies.
-
-```text
-python run.py
-```
-
-Open <http://127.0.0.1:8000> and configure the target, builds, runes, and combo.
-
-Run the complete automated suite without creating Python cache files:
-
-```text
-python -B -m unittest discover -s tests -v
-```
-
-At this documentation revision, the maintained suite contains **74 passing
-tests** covering the damage pipeline, timing, progression, items, runes,
-security limits, and HTTP behavior.
-
-Run the fixed Practice Tool baseline comparison separately with:
-
-```text
-python -B validation/backtest.py
-```
 
 ## Documentation
 
@@ -152,7 +134,7 @@ by Git.
 These controls reduce accidental and low-cost abuse; they are not a substitute
 for monitoring and platform-level denial-of-service protection.
 
-## Hosting and asset caching
+## Deployment and asset transparency
 
 The bootstrap data is returned as one compressed response. Versioned JavaScript,
 CSS, and icons use long-lived browser caching, while `index.html` revalidates so
@@ -161,14 +143,9 @@ are gzip-compressed when supported by the client.
 
 Render uses `RENDER_GIT_COMMIT` for asset versioning automatically. After
 changing icon contents, increment `ICON_VERSION` in
-`backend/data/__init__.py`. Optimize local icons with:
-
-```text
-python tools/optimize_icons.py
-```
-
-Pillow is required only for that optional maintenance command, not for the
-hosted application.
+`backend/data/__init__.py`. The optional icon optimizer and its Pillow
+dependency are maintenance-only and are not part of the hosted runtime. Details
+are in [Maintaining items](docs/ITEM_MAINTENANCE.md#icons).
 
 Render Free services can sleep when idle. An external monitor may request
 `/healthz`, but an always-on paid instance is the supported way to avoid free
