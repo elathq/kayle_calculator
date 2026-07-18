@@ -75,7 +75,9 @@ stable even if Riot changes the displayed name.
     "crit_chance": 25,
     "crit_damage_bonus": 30,
     "tenacity": 20,
+    "slow_resist": 25,
     "omnivamp": 0.10,
+    "life_steal": 0.05,
 },
 ```
 
@@ -88,6 +90,7 @@ move_speed_pct: 4   = 4% movement speed
 
 magic_pen_pct: 0.30 = 30% magic penetration
 omnivamp: 0.10      = 10% omnivamp
+life_steal: 0.05    = 5% life steal
 ap_ratio: 0.15      = 15% AP scaling
 ```
 

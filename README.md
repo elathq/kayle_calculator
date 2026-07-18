@@ -35,6 +35,121 @@ items per build     <= 6
 combo actions       <= 100
 ```
 
+## Core calculations
+
+The engine resolves every physical, magic, and true-damage component as its
+own full-precision timeline instance. Source-specific formulas supply the raw
+value; the following pipeline produces the final comparison metrics.
+
+For damage instance $i$ at timestamp $t_i$, its source value and raw damage are
+
+$$
+S_i = B_i + \sum_k (X_{ik} \cdot R_{ik}) + H_i
+$$
+
+$$
+D_i^{\mathrm{raw}} = S_i \cdot \prod_k M_{ik}^{\mathrm{source}}
+$$
+
+where $B_i$ is base damage, $X_{ik}R_{ik}$ contains relevant AD, AP, or HP
+scalings, $H_i$ contains on-hit, missing-health, stack, and level terms, and
+$M_{ik}^{\mathrm{source}}$ contains eligible source modifiers such as expected
+critical strikes, Axiom Arcanist, or Hexoptics.
+
+Percentage resistance reductions and percentage penetration stack
+multiplicatively:
+
+$$
+q_i = 1 - \prod_j (1-q_{ij}),
+\qquad
+p_i = 1 - \prod_j (1-p_{ij})
+$$
+
+Here, $q_{ij}$ includes effects such as Q and Bloodletter, while $p_{ij}$
+includes item penetration and Terminus. Effective resistance is
+
+$$
+R_i^{(1)} = R_i^{\mathrm{listed}}(1-q_i)
+$$
+
+$$
+R_i^{\mathrm{effective}} =
+\begin{cases}
+\max\!\left(0,\ R_i^{(1)}(1-p_i)-F_i\right), & R_i^{(1)} > 0 \\
+R_i^{(1)}, & R_i^{(1)} \le 0
+\end{cases}
+$$
+
+where $F_i$ is eligible flat penetration. The resistance multiplier is
+
+$$
+G_i =
+\begin{cases}
+1, & \text{true damage} \\
+\dfrac{100}{100+R_i^{\mathrm{effective}}},
+  & R_i^{\mathrm{effective}} \ge 0 \\
+2-\dfrac{100}{100-R_i^{\mathrm{effective}}},
+  & R_i^{\mathrm{effective}} < 0
+\end{cases}
+$$
+
+All eligible outgoing amplifiers multiply together:
+
+$$
+A_i = \prod_j (1+a_{ij})
+$$
+
+$a_{ij}$ includes Press the Attack, Coup de Grace, Cut Down, Last Stand,
+Riftmaker, and Lord Dominik's Regards when their conditions are active.
+Shadowflame contributes
+
+$$
+C_i =
+\begin{cases}
+1.20, & \text{magic or true damage and frame-start HP}<0.40H_{\max} \\
+1, & \text{otherwise}
+\end{cases}
+$$
+
+The final applied damage for one instance and the complete combo are
+
+$$
+D_i^{\mathrm{applied}}
+=D_i^{\mathrm{raw}}\cdot A_i\cdot C_i\cdot G_i
+$$
+
+$$
+\boxed{D_{\mathrm{total}}=\sum_i D_i^{\mathrm{applied}}}
+$$
+
+First Strike creates a separate, non-recursive true-damage instance equal to
+$0.07D_i^{\mathrm{applied}}$, which is included in the total above.
+
+Let $t_{\min}$ and $t_{\max}$ be the first and last damage timestamps. The DPS
+formula matched against the Practice Tool is
+
+$$
+\boxed{
+\mathrm{DPS}=
+\begin{cases}
+0, & \text{no damage instances} \\
+D_{\mathrm{total}}, & t_{\min}=t_{\max} \\
+\dfrac{D_{\mathrm{total}}}{t_{\max}-t_{\min}}, & t_{\min}<t_{\max}
+\end{cases}}
+$$
+
+Setup before the first hit and recovery after the final hit are excluded.
+Delayed damage moves $t_{\max}$ and extends the DPS window.
+
+The strongest rolling one-second burst is
+
+$$
+\boxed{
+B_{1\mathrm{s}}
+=\max_s\left(\sum_{i:\ s\le t_i\le s+1\mathrm{s}}
+D_i^{\mathrm{applied}}\right)}
+$$
+
 ## Accuracy and evidence
 
 The engine uses one full-precision damage path. League can round floating text,
@@ -57,7 +172,7 @@ Documentation snapshot:
 review date                    = 2026-07-18
 local Riot asset set           = Data Dragon 16.14.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 74 passing
+automated tests                = 77 passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -96,7 +211,7 @@ explains how to update it.
 Catalog snapshot:
 
 ```text
-selectable items = 39
+selectable items = 42
 ```
 
 ## API overview
@@ -172,6 +287,7 @@ top-lane quest levels = 19..20
 illegal at those levels:
   - Swiftmarch
   - Spellslinger's Shoes
+  - Gunmetal Greaves
 ```
 
 The complete list is in [Simulation model](docs/MODEL.md#assumptions-and-exclusions).

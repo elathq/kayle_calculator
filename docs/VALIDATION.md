@@ -632,6 +632,52 @@ Fleet feeds Swiftmarch after its visible update. An immediately queued command
 can snapshot before that update; waiting for the displayed movement jump gives
 the higher physical result.
 
+### Berserker's Greaves and DPS timing
+
+```text
+setup:
+  Kayle level      = 6
+  ranks            = Q3 / W1 / E1 / R1
+  runes            = Fleet Footwork, Alacrity 0 / 10
+  shards           = 10% attack speed, adaptive, health
+  target           = 1000 HP / 30 armor / 30 MR
+  items            = Nashor's Tooth, then Berserker's Greaves
+
+displayed attack speed:
+  Nashor's, zero Zeal stacks             = 1.085
+  Nashor's + Berserker's, zero stacks    = 1.251
+  Nashor's + Berserker's, five stacks    = 1.452
+
+one basic attack:
+  displayed AD / AP = 60 / 89
+  damage            = 47 magic + 46 physical
+  total / DPS       = 93 / 93
+  Berserker's does not change hit damage
+
+six basic attacks, Nashor's only:
+  target HP / total = 442 / 559
+  Practice Tool DPS = 134
+
+six basic attacks, with Berserker's:
+  target HP / total = 442 / 559
+  Practice Tool DPS = 153
+
+two basic attacks with Berserker's:
+  total / DPS       = 186 / 242
+```
+
+The dummy starts its DPS window on the first damage timestamp and ends it on
+the last. It excludes recovery after the final attack. When every component
+lands at one timestamp, it reports total damage as DPS. The simulator now uses
+the same rule; the six-attack Berserker's result is:
+
+```text
+exact damage       = 558.58
+damage window      = 3.652 s
+DPS                = 153.0
+full action window = 4.341 s (audit field only)
+```
+
 ## Source-backed item coverage still awaiting isolation
 
 Automated tests cover the implemented timing, stacking, expected-crit, and
@@ -655,7 +701,7 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 74 passing
+maintained automated tests = 77 passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,

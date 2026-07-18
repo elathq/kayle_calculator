@@ -42,8 +42,16 @@ def frontend_asset_version():
     if IS_RENDER:
         return DEPLOY_VERSION
     latest_asset_mtime = max(
-        (FRONTEND / filename).stat().st_mtime_ns
-        for filename in ("style.css", "app.js")
+        path.stat().st_mtime_ns
+        for path in (
+            FRONTEND / "style.css",
+            FRONTEND / "app.js",
+            FRONTEND.parent / "backend" / "data" / "__init__.py",
+            FRONTEND.parent / "backend" / "data" / "items_data.py",
+            FRONTEND.parent / "backend" / "data" / "runes_data.py",
+            FRONTEND.parent / "backend" / "data" / "enemy_data.py",
+            FRONTEND.parent / "backend" / "data" / "kayle_data.py",
+        )
     )
     return f"dev-{latest_asset_mtime:x}"
 

@@ -2,6 +2,9 @@
 "use strict";
 
 const API = "";
+const APP_VERSION = new URL(
+  document.currentScript.src, window.location.href,
+).searchParams.get("v") || "dev";
 let ITEMS = [];                 // catalog from backend
 let ITEM_BY_KEY = {};
 let RUNES = [];                 // rune paths from backend
@@ -24,6 +27,11 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+function versionedApi(path) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${API}${path}${separator}v=${encodeURIComponent(APP_VERSION)}`;
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -65,7 +73,9 @@ async function init() {
   // One compressed request replaces the five serial requests needed for the
   // initial catalog, runes, champion progression, and enemy preset.
   const bootstrap = await (await fetch(
-    `${API}/api/bootstrap?level=${state.level}&preset=${state.enemyPreset}`)).json();
+    versionedApi(
+      `/api/bootstrap?level=${state.level}&preset=${state.enemyPreset}`,
+    ))).json();
 
   ITEMS = bootstrap.items;
   ITEMS.forEach((it) => (ITEM_BY_KEY[it.key] = it));
@@ -160,7 +170,9 @@ function readRanks() {
 }
 
 async function applyAutoRanks() {
-  const data = await (await fetch(`${API}/api/champion?level=${state.level}`)).json();
+  const data = await (await fetch(
+    versionedApi(`/api/champion?level=${state.level}`),
+  )).json();
   state.ranks = data.default_ranks;
   buildRankSelects();
   for (const ab of ["Q", "W", "E", "R"]) $("rank" + ab).value = state.ranks[ab];
@@ -203,7 +215,9 @@ function updatePassiveBadge() {
 async function onPresetChange() {
   state.enemyPreset = $("enemyPreset").value;
   const data = await (await fetch(
-    `${API}/api/enemy_preset?preset=${state.enemyPreset}&level=${state.level}`)).json();
+    versionedApi(
+      `/api/enemy_preset?preset=${state.enemyPreset}&level=${state.level}`,
+    ))).json();
   applyEnemyData(data);
 }
 
@@ -364,8 +378,9 @@ function openOverlay(buildId, slotIdx) {
         ultimate_haste: "Ult AH", crit_chance: "Crit%", crit_damage_bonus: "Crit dmg%",
         health: "HP", armor: "Armor", mr: "MR", magic_pen_flat: "MPen",
         magic_pen_pct: "MPen%", armor_pen_pct: "Armor pen%", move_speed_flat: "MS",
-        move_speed_pct: "MS%", tenacity: "Tenacity%", omnivamp: "Omnivamp" }[k] || k;
-      const val = ["magic_pen_pct", "armor_pen_pct", "omnivamp"].includes(k)
+        move_speed_pct: "MS%", tenacity: "Tenacity%", slow_resist: "Slow resist%",
+        omnivamp: "Omnivamp", life_steal: "Life steal" }[k] || k;
+      const val = ["magic_pen_pct", "armor_pen_pct", "omnivamp", "life_steal"].includes(k)
         ? `${v * 100}%` : v;
       return `${val} ${label}`;
     }).join(" · ");
@@ -904,7 +919,7 @@ function renderResults(results) {
       </div>
       <div class="stat-rows">
         <span class="k">Pre-mitigation</span><span class="v">${fmtDamage(r.pre_mitigation_total)} (−${r.mitigated_pct}%)</span>
-        <span class="k">Attacks / duration</span><span class="v">${r.attack_count} in ${r.duration.toFixed(2)}s</span>
+        <span class="k">Attacks / DPS window</span><span class="v">${r.attack_count} in ${r.duration.toFixed(2)}s</span>
         <span class="k">Peak 1s window</span>
         <span class="v">${r.burst_window_1s.start !== null
           ? r.burst_window_1s.start.toFixed(2) + "–" + r.burst_window_1s.end.toFixed(2) + "s"
@@ -916,6 +931,12 @@ function renderResults(results) {
         <span class="k">Attack speed</span><span class="v">${r.stats.attack_speed_final}</span>
         <span class="k">AD / AP</span><span class="v">${r.stats.total_ad} / ${r.stats.ap}</span>
         <span class="k">Movement speed</span><span class="v">${r.stats.movement_speed ?? "—"}</span>
+        ${r.stats.life_steal > 0
+          ? `<span class="k">Life steal</span><span class="v">${r.stats.life_steal}%</span>`
+          : ""}
+        ${r.stats.slow_resist > 0
+          ? `<span class="k">Slow resistance</span><span class="v">${r.stats.slow_resist}%</span>`
+          : ""}
         ${r.stats.swiftmarch_adaptive_force > 0
           ? `<span class="k">Swiftmarch force</span><span class="v">${r.stats.swiftmarch_adaptive_force} adaptive</span>`
           : ""}

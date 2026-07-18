@@ -12,10 +12,21 @@ sequence. The engine returns damage by type, total damage, DPS, burst, healing,
 kill time, remaining target HP, final stats, the event timeline, and warnings.
 
 ```text
-combo DPS = total applied damage / completed timeline duration
+damage window = last damage timestamp - first damage timestamp
+
+if the combo has multiple damage timestamps:
+    combo DPS = total applied damage / damage window
+
+if all damage lands at one timestamp:
+    combo DPS = total applied damage
 
 burst = maximum applied damage in any rolling 1.0 s window
 ```
+
+This matches the Practice Tool target dummy: setup time before the first hit
+and recovery time after the final hit are excluded. Delayed damage extends the
+ending timestamp. The API also returns `timeline_duration` for auditing the
+complete action and recovery timeline separately.
 
 The entered sequence always executes. Cooldown conflicts produce warnings so
 the calculator can still isolate intentionally invalid sequences.
@@ -77,7 +88,7 @@ attack interval = 1 / total AS
 ```
 
 Hail of Blades may exceed the normal cap. Attack speed controls attack spacing,
-combo duration, and DPS.
+the first-to-last damage window, and DPS.
 
 Default rank path:
 
@@ -307,11 +318,22 @@ are ignored with a warning.
 exclusive families = Boots, Starter, Spellblade, Blight, Fatality
 
 Boots                 = 25 flat MS
+Boots of Swiftness    = 55 flat MS + 25% slow resistance
+Berserker's Greaves   = 45 flat MS + 25% attack speed
+Gunmetal Greaves      = 45 flat MS + 40% attack speed + 5% life steal
 Sorcerer's Shoes      = 45 flat MS + 12 flat magic penetration
 Spellslinger's Shoes  = 45 flat MS + 18 flat and 8% magic penetration
 Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
 Magical Footwear      = +10 flat MS to equipped Boots
+
+Gunmetal life-steal healing = 0.05 * post-mitigation basic physical damage
 ```
+
+Attack speed from Berserker's and Gunmetal shortens basic-attack intervals,
+which reduces combo duration and raises DPS without changing the number of
+configured attacks. Swifties do not grant attack speed, damage, or Swiftmarch
+adaptive force. Incoming slows are outside the current simulation, so their
+slow resistance is displayed but does not alter the timeline.
 
 ### Spellblade and on-hit items
 

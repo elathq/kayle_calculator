@@ -81,6 +81,9 @@ baseline fixture is
 | Simulator item | Wiki source |
 |---|---|
 | Boots | [Boots](https://wiki.leagueoflegends.com/en-us/Boots) |
+| Boots of Swiftness | [Boots of Swiftness](https://wiki.leagueoflegends.com/en-us/Boots_of_Swiftness) |
+| Berserker's Greaves | [Berserker's Greaves](https://wiki.leagueoflegends.com/en-us/Berserker%27s_Greaves) |
+| Gunmetal Greaves | [Gunmetal Greaves](https://wiki.leagueoflegends.com/en-us/Gunmetal_Greaves) |
 | Doran's Ring | [Doran's Ring](https://wiki.leagueoflegends.com/en-us/Doran%27s_Ring) |
 | Doran's Bow | [Doran's Bow](https://wiki.leagueoflegends.com/en-us/Doran%27s_Bow) |
 | Doran's Blade | [Doran's Blade](https://wiki.leagueoflegends.com/en-us/Doran%27s_Blade) |

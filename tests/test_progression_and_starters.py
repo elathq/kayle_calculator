@@ -106,11 +106,81 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         # exist in one legal build.
         top_quest = Simulation(
             20, default_ability_ranks(20),
-            ["swiftmarch", "spellslingers_shoes"], ENEMY, [], {},
+            ["swiftmarch", "spellslingers_shoes", "gunmetal_greaves"],
+            ENEMY, [], {},
         )
         self.assertEqual(top_quest.items, [])
         self.assertTrue(any("mid role quest" in warning
                             for warning in top_quest.warnings))
+
+    def test_attack_speed_boots_shorten_combos_but_swifties_do_not_add_damage(self):
+        combo = [{"type": "AA"}, {"type": "AA"}, {"type": "AA"}]
+        ranks = default_ability_ranks(18)
+
+        baseline = Simulation(18, ranks, [], ENEMY, combo, {}).run()
+        swifties_sim = Simulation(
+            18, ranks, ["boots_of_swiftness"], ENEMY, combo, {})
+        berserkers_sim = Simulation(
+            18, ranks, ["berserkers_greaves"], ENEMY, combo, {})
+        gunmetal_sim = Simulation(
+            18, ranks, ["gunmetal_greaves"], ENEMY, combo, {})
+
+        swifties = swifties_sim.run()
+        berserkers = berserkers_sim.run()
+        gunmetal = gunmetal_sim.run()
+
+        self.assertEqual(swifties_sim.item_as, 0)
+        self.assertEqual(swifties_sim.slow_resist, 25)
+        self.assertAlmostEqual(swifties_sim.current_movement_speed, 426.2)
+        self.assertFalse(swifties_sim.has_swiftmarch)
+        self.assertEqual(swifties_sim.swiftmarch_force, 0)
+        self.assertEqual(swifties["total_damage"], baseline["total_damage"])
+        self.assertEqual(swifties["duration"], baseline["duration"])
+
+        self.assertEqual(berserkers_sim.item_as, 25)
+        self.assertAlmostEqual(berserkers_sim.current_movement_speed, 417.4)
+        self.assertEqual(berserkers["total_damage"], baseline["total_damage"])
+        self.assertLess(berserkers["duration"], baseline["duration"])
+        self.assertGreater(berserkers["dps"], baseline["dps"])
+
+        self.assertEqual(gunmetal_sim.item_as, 40)
+        self.assertEqual(gunmetal_sim.life_steal, 0.05)
+        self.assertTrue(gunmetal_sim.mid_role_quest_completed)
+        self.assertEqual(gunmetal["total_damage"], baseline["total_damage"])
+        self.assertLess(gunmetal["duration"], berserkers["duration"])
+        self.assertGreater(gunmetal["dps"], berserkers["dps"])
+        self.assertGreater(gunmetal["healing"], 0)
+
+    def test_berserkers_dps_matches_level_six_practice_tool_window(self):
+        enemy = {
+            "hp": 1000, "current_hp": 1000, "bonus_hp": 0,
+            "armor": 30, "mr": 30,
+        }
+        options = {
+            "rune_ids": [8021, 9104],
+            "shards": ["attack_speed", "adaptive", "health"],
+            "legend_stacks": 0,
+            "pre_stacked_zeal": False,
+            "fleet_starts_energized": True,
+        }
+        ranks = default_ability_ranks(6)
+        items = ["nashors_tooth", "berserkers_greaves"]
+
+        single = Simulation(
+            6, ranks, items, enemy, [{"type": "AA"}], options).run()
+        six = Simulation(
+            6, ranks, items, enemy, [{"type": "AA"}] * 6, options).run()
+
+        # Practice Tool isolation: one AA displays 93 total / 93 DPS. Six AAs
+        # display 559 total / 153 DPS because the trailing recovery after AA 6
+        # is excluded from its first-to-last-hit timer.
+        self.assertEqual(single["total_damage"], 93.1)
+        self.assertEqual(single["duration"], 1.0)
+        self.assertEqual(single["dps"], 93.1)
+        self.assertEqual(six["total_damage"], 558.58)
+        self.assertEqual(six["duration"], 3.652)
+        self.assertEqual(six["dps"], 153.0)
+        self.assertGreater(six["timeline_duration"], six["duration"])
 
 
     def test_dark_seal_glory_is_configurable_and_capped_at_ten(self):
@@ -149,6 +219,7 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         keys = {item["key"] for item in item_list_for_api()}
         self.assertTrue({
             "boots", "dorans_ring", "dorans_bow", "dorans_blade", "dark_seal",
+            "boots_of_swiftness", "berserkers_greaves", "gunmetal_greaves",
         }.issubset(keys))
 
 

@@ -132,6 +132,7 @@ class Simulation:
         self.kayle_max_hp = base["hp"]
 
         ad = ap = as_pct = hp = haste = ultimate_haste = flat_pen = omnivamp = 0.0
+        life_steal = slow_resist = 0.0
         flat_ms = pct_ms = 0.0
         pct_pen = armor_pct_pen = 0.0
         crit_chance = crit_damage_bonus = 0.0
@@ -151,6 +152,8 @@ class Simulation:
             pct_pen = 1 - (1 - pct_pen) * (1 - s.get("magic_pen_pct", 0))
             armor_pct_pen = 1 - (1 - armor_pct_pen) * (1 - s.get("armor_pen_pct", 0))
             omnivamp += s.get("omnivamp", 0)
+            life_steal += s.get("life_steal", 0)
+            slow_resist += s.get("slow_resist", 0)
             flat_ms += s.get("move_speed_flat", 0)
             pct_ms += s.get("move_speed_pct", 0)
             crit_chance += s.get("crit_chance", 0)
@@ -267,6 +270,8 @@ class Simulation:
         self.base_crit_chance = self.crit_chance
         self.crit_damage = KAYLE_AS["crit_damage"] + crit_damage_bonus / 100.0
         self.omnivamp = omnivamp
+        self.life_steal = life_steal
+        self.slow_resist = slow_resist
         self.flat_move_speed = flat_ms
         self.percent_move_speed = pct_ms
 
@@ -1104,6 +1109,12 @@ class Simulation:
         elif self.crit_chance > 0:
             label += " (expected crit)"
         dealt = self._deal(raw, "physical", label, at_time)
+        if self.life_steal:
+            self._heal(
+                dealt * self.life_steal,
+                f"{source} life steal",
+                at_time,
+            )
         if self.current_attack_fiendhunter and self.crit_chance > 0:
             opening = ITEMS["fiendhunter_bolts"]["opening_barrage"]
             natural_crit_raw = (self.total_ad * self.crit_damage
@@ -1639,6 +1650,22 @@ class Simulation:
 
         return best_damage, best_start, best_start + seconds
 
+    def _practice_tool_dps_window(self):
+        """Return the time window used by the Practice Tool DPS display.
+
+        The target dummy starts timing on the first damage timestamp and stops
+        on the latest one.  A single-hit combo has no elapsed damage span, so
+        the Practice Tool reports its total damage as DPS (a one-second
+        denominator).  Non-damaging setup and recovery time after the final
+        hit are intentionally excluded.
+        """
+        if not self.damage_instances:
+            return 0.0, None, None
+        first = min(at_time for at_time, _ in self.damage_instances)
+        last = max(at_time for at_time, _ in self.damage_instances)
+        elapsed = last - first
+        return (elapsed if elapsed > 1e-9 else 1.0), first, last
+
     def run(self):
         for action in self.combo:
             kind = action.get("type")
@@ -1678,7 +1705,7 @@ class Simulation:
         totals = self.damage_totals
         pre_total = self.pre_mitigation_total
         total = sum(totals.values())
-        duration = max(self.end_time, 0.001)
+        duration, damage_start, damage_end = self._practice_tool_dps_window()
         gold = sum(ITEMS[k]["cost"] for k in self.items)
         burst_damage, burst_start, burst_end = self._peak_damage_window(1.0)
 
@@ -1705,6 +1732,8 @@ class Simulation:
                 "armor_pen_pct": round(self.armor_pct_pen * 100, 1),
                 "crit_chance": round(self.crit_chance * 100, 1),
                 "crit_damage": round(self.crit_damage * 100, 1),
+                "life_steal": round(self.life_steal * 100, 1),
+                "slow_resist": round(self.slow_resist, 1),
                 "adaptive_type": "physical" if self.adaptive_physical else "magic",
             },
             "ranks": self.ranks,
@@ -1715,7 +1744,12 @@ class Simulation:
             "pre_mitigation_total": round(pre_total, 2),
             "mitigated_pct": round(100 * (1 - total / pre_total), 1) if pre_total else 0,
             "duration": round(duration, 3),
-            "dps": round(total / duration, 1),
+            "timeline_duration": round(self.end_time, 3),
+            "damage_window": {
+                "start": round(damage_start, 3) if damage_start is not None else None,
+                "end": round(damage_end, 3) if damage_end is not None else None,
+            },
+            "dps": round(total / duration, 1) if duration else 0.0,
             "burst_damage_1s": round(burst_damage, 2),
             "burst_window_1s": {
                 "start": round(burst_start, 3) if burst_start is not None else None,

@@ -6,7 +6,7 @@ Community Dragon CDN if a local icon is missing.
 Stats keys: ad, ap, attack_speed (%), ability_haste, ultimate_haste, health,
 armor, mr, magic_pen_flat, magic_pen_pct (fraction), armor_pen_pct (fraction),
 move_speed_flat, move_speed_pct, crit_chance (%), crit_damage_bonus (%),
-tenacity (%), omnivamp (fraction).
+tenacity (%), slow_resist (%), omnivamp (fraction), life_steal (fraction).
 """
 
 from . import ICON_VERSION
@@ -38,7 +38,7 @@ SUPPORTED_STAT_KEYS = {
     "ad", "ap", "attack_speed", "ability_haste", "ultimate_haste",
     "health", "armor", "mr", "magic_pen_flat", "magic_pen_pct",
     "armor_pen_pct", "move_speed_flat", "move_speed_pct", "crit_chance",
-    "crit_damage_bonus", "tenacity", "omnivamp",
+    "crit_damage_bonus", "tenacity", "slow_resist", "omnivamp", "life_steal",
 }
 
 # These effect shapes are reusable for newly added items without engine edits.
@@ -67,6 +67,40 @@ ITEMS = {
         "stats": {"move_speed_flat": 25},
         "tags": ["boots"],
         "passive_text": "25 movement speed. Limited to 1 Boots item.",
+    },
+    "boots_of_swiftness": {
+        "id": 3009,
+        "name": "Boots of Swiftness",
+        "cost": 1000,
+        "stats": {"move_speed_flat": 55, "slow_resist": 25},
+        "tags": ["boots"],
+        "passive_text": (
+            "55 movement speed. Fleetfooted: 25% slow resist. Incoming slows "
+            "are not modeled, and these boots do not grant Swiftmarch's "
+            "adaptive-force conversion."),
+    },
+    "berserkers_greaves": {
+        "id": 3006,
+        "name": "Berserker's Greaves",
+        "cost": 1100,
+        "stats": {"attack_speed": 25, "move_speed_flat": 45},
+        "tags": ["boots"],
+        "passive_text": (
+            "25% attack speed and 45 movement speed. Attack speed shortens "
+            "basic-attack intervals and therefore combo duration."),
+    },
+    "gunmetal_greaves": {
+        "id": 3172,
+        "name": "Gunmetal Greaves",
+        "cost": 1100,
+        "stats": {
+            "attack_speed": 40, "move_speed_flat": 45, "life_steal": 0.05,
+        },
+        "tags": ["boots", "mid_role_quest"],
+        "passive_text": (
+            "40% attack speed, 45 movement speed, and 5% life steal. Equipping "
+            "this evolved mid-role boot activates the completed quest reward, "
+            "which also increases bonus AD and AP by 8%."),
     },
     "dorans_ring": {
         "id": 1056,
@@ -620,7 +654,8 @@ def validate_item_catalog(items=None):
             if not isinstance(value, (int, float)):
                 raise ValueError(f"{label}.stats[{stat!r}] must be numeric")
 
-        for fraction_stat in ("magic_pen_pct", "armor_pen_pct", "omnivamp"):
+        for fraction_stat in (
+                "magic_pen_pct", "armor_pen_pct", "omnivamp", "life_steal"):
             value = stats.get(fraction_stat, 0)
             if not 0 <= value <= 1:
                 raise ValueError(
