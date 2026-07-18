@@ -701,7 +701,7 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 77 passing
+maintained automated tests = 79 passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,

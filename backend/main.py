@@ -24,6 +24,8 @@ from .data.runes_data import (
     SHARDS,
     RUNE_MATH,
     RUNE_PATHS,
+    RUNE_KEY_TO_ID,
+    RUNE_PATH_KEY_TO_ID,
     runes_for_api,
 )
 from .engine import simulate_build
@@ -77,16 +79,16 @@ ENEMY_PRESET_CATALOG = [
     for key, value in ENEMY_PRESETS.items()
 ]
 RUNE_NAMES = {
-    rune["id"]: rune["name"]
+    rune["key"]: rune["name"]
     for path in RUNE_PATHS for slot in path["slots"] for rune in slot
 }
-DAMAGE_RUNE_IDS = {
-    rune["id"]
+DAMAGE_RUNE_KEYS = {
+    rune["key"]
     for path in RUNE_PATHS for slot in path["slots"] for rune in slot
     if rune["dmg"]
 }
-RUNE_IDS = set(RUNE_NAMES)
-RUNE_PATH_IDS = {path["id"] for path in RUNE_PATHS}
+RUNE_KEYS = set(RUNE_NAMES)
+RUNE_PATH_KEYS = set(RUNE_PATH_KEY_TO_ID)
 SHARD_KEYS = {
     option["key"]
     for slot in SHARDS
@@ -225,20 +227,13 @@ def validate_simulation_payload(payload):
         raw_runes = _mapping(raw_build.get("runes") or {},
                              f"builds[{index}].runes")
         selected = []
-        for rune_index, rune_id in enumerate(_sequence(
+        for rune_index, rune_key in enumerate(_sequence(
                 raw_runes.get("selected") or [],
                 f"builds[{index}].runes.selected", 6)):
-            rune_id = _number(
-                rune_id,
-                f"builds[{index}].runes.selected[{rune_index}]",
-                1,
-                100_000,
-                integer=True,
-            )
-            if rune_id not in RUNE_IDS:
+            if not isinstance(rune_key, str) or rune_key not in RUNE_KEYS:
                 raise RequestValidationError(
-                    f"builds[{index}].runes.selected[{rune_index}] is not a known rune")
-            selected.append(rune_id)
+                    f"builds[{index}].runes.selected[{rune_index}] is not a known rune key")
+            selected.append(rune_key)
 
         shards = []
         for shard_index, shard in enumerate(_sequence(
@@ -252,17 +247,12 @@ def validate_simulation_payload(payload):
         safe_runes = {"selected": selected, "shards": shards}
         for path_key in ("primary", "secondary"):
             if path_key in raw_runes:
-                path_id = _number(
-                    raw_runes[path_key],
-                    f"builds[{index}].runes.{path_key}",
-                    1,
-                    100_000,
-                    integer=True,
-                )
-                if path_id not in RUNE_PATH_IDS:
+                path_name = raw_runes[path_key]
+                if (not isinstance(path_name, str)
+                        or path_name not in RUNE_PATH_KEYS):
                     raise RequestValidationError(
-                        f"builds[{index}].runes.{path_key} is not a known path")
-                safe_runes[path_key] = path_id
+                        f"builds[{index}].runes.{path_key} is not a known rune path key")
+                safe_runes[path_key] = path_name
 
         builds.append({"name": name, "items": item_keys, "runes": safe_runes})
 
@@ -345,7 +335,8 @@ def handle_simulate(payload: dict) -> dict:
     options = payload["options"]
     results = []
     for build in payload.get("builds", []):
-        selected_runes = (build.get("runes") or {}).get("selected", [])
+        selected_rune_keys = (build.get("runes") or {}).get("selected", [])
+        selected_rune_ids = [RUNE_KEY_TO_ID[key] for key in selected_rune_keys]
         shards = (build.get("runes") or {}).get("shards", [])
         res = simulate_build(
             level=level,
@@ -353,15 +344,18 @@ def handle_simulate(payload: dict) -> dict:
             item_keys=build.get("items", []),
             enemy=enemy,
             combo=combo,
-            options={**options, "rune_ids": selected_runes, "shards": shards},
+            options={**options, "rune_ids": selected_rune_ids, "shards": shards},
         )
         res["build_name"] = build.get("name", "Build")
         res["items"] = build.get("items", [])
         res["runes"] = build.get("runes")
         # Damage-relevant runes without provided math are not yet applied — say so.
-        selected = set((build.get("runes") or {}).get("selected", []))
-        pending = sorted(RUNE_NAMES[i] for i in selected
-                         if i in DAMAGE_RUNE_IDS and i not in RUNE_MATH)
+        selected = set(selected_rune_keys)
+        pending = sorted(
+            RUNE_NAMES[key] for key in selected
+            if (key in DAMAGE_RUNE_KEYS
+                and RUNE_KEY_TO_ID[key] not in RUNE_MATH)
+        )
         if pending:
             res["warnings"].append(
                 "Rune math pending (not applied yet): " + ", ".join(pending))

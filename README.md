@@ -119,7 +119,7 @@ D_i^{\mathrm{applied}}
 $$
 
 $$
-\boxed{D_{\mathrm{total}}=\sum_i D_i^{\mathrm{applied}}}
+D_{\mathrm{total}}=\sum_i D_i^{\mathrm{applied}}
 $$
 
 First Strike creates a separate, non-recursive true-damage instance equal to
@@ -129,13 +129,12 @@ Let $t_{\min}$ and $t_{\max}$ be the first and last damage timestamps. The DPS
 formula matched against the Practice Tool is
 
 $$
-\boxed{
 \mathrm{DPS}=
 \begin{cases}
 0, & \text{no damage instances} \\
 D_{\mathrm{total}}, & t_{\min}=t_{\max} \\
-\dfrac{D_{\mathrm{total}}}{t_{\max}-t_{\min}}, & t_{\min}<t_{\max}
-\end{cases}}
+\dfrac{D_{\mathrm{total}}}{t_{\max}-t_{\min}}, & t_{\min}\lt t_{\max}
+\end{cases}
 $$
 
 Setup before the first hit and recovery after the final hit are excluded.
@@ -144,10 +143,9 @@ Delayed damage moves $t_{\max}$ and extends the DPS window.
 The strongest rolling one-second burst is
 
 $$
-\boxed{
 B_{1\mathrm{s}}
 =\max_s\left(\sum_{i:\ s\le t_i\le s+1\mathrm{s}}
-D_i^{\mathrm{applied}}\right)}
+D_i^{\mathrm{applied}}\right)
 $$
 
 ## Accuracy and evidence
@@ -172,7 +170,7 @@ Documentation snapshot:
 review date                    = 2026-07-18
 local Riot asset set           = Data Dragon 16.14.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 77 passing
+automated tests                = 79 passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -187,6 +185,7 @@ Practice Tool isolation.
 | [Validation and backtesting](docs/VALIDATION.md) | Practice Tool observations and exact simulator comparisons. |
 | [Data and icon sources](docs/SOURCES.md) | External references, version pins, and asset provenance. |
 | [Maintaining items](docs/ITEM_MAINTENANCE.md) | Item schema and patch-update workflow. |
+| [API guide](docs/API.md) | Endpoints, readable keys, request payloads, responses, limits, and errors. |
 
 Each fact has one home: the model says what is calculated, validation records
 why it is trusted, sources identify the external reference, and maintenance
@@ -213,22 +212,6 @@ Catalog snapshot:
 ```text
 selectable items = 42
 ```
-
-## API overview
-
-| Route | Purpose |
-|---|---|
-| `GET /healthz` | Lightweight health check. |
-| `GET /api/bootstrap?level=N&preset=K` | Initial UI data. |
-| `GET /api/champion?level=N` | Kayle stats and default ranks. |
-| `GET /api/items` | Item catalog. |
-| `GET /api/runes` | Rune and shard catalog. |
-| `GET /api/enemy_presets` | Target presets. |
-| `GET /api/enemy_preset?preset=K&level=N` | One scaled target. |
-| `POST /api/simulate` | Validate and simulate a build comparison. |
-
-Maximum HP, starting HP, and bonus HP are separate because different mechanics
-read different target values.
 
 ## Public-hosting safeguards
 

@@ -601,13 +601,14 @@ function renderRuneEditor() {
   box.append(prim, sec);
 }
 
-function selectedRuneIds(b) {
+function selectedRuneKeys(b) {
   if (!b.runes) return [];
-  return [
+  const selectedIds = [
     b.runes.keystone,
     ...b.runes.primarySlots,
     ...b.runes.secondarySlots.map((s) => s.id),
   ].filter(Boolean);
+  return selectedIds.map((id) => RUNE_BY_ID[id].key);
 }
 
 /* ================= combo ================= */
@@ -785,9 +786,9 @@ async function simulate() {
         name: b.name,
         items: b.items.filter(Boolean),
         runes: {
-          primary: b.runes.primary,
-          secondary: b.runes.secondary,
-          selected: selectedRuneIds(b),
+          primary: PATH_BY_ID[b.runes.primary].key,
+          secondary: PATH_BY_ID[b.runes.secondary].key,
+          selected: selectedRuneKeys(b),
           shards: b.runes.shards || [],
         },
       })),

@@ -7,11 +7,13 @@ be wired into the engine once the user provides each rune's math.
 Everything else is selectable in the UI but purely visual.
 """
 
+import re
+
 from . import ICON_VERSION
 
 RUNE_PATHS = [
     {
-        "id": 8000, "key": "Precision", "name": "Precision",
+        "id": 8000, "key": "precision", "name": "Precision",
         "slots": [
             [
                 {"id": 8005, "name": "Press the Attack", "dmg": True,
@@ -41,7 +43,7 @@ RUNE_PATHS = [
         ],
     },
     {
-        "id": 8100, "key": "Domination", "name": "Domination",
+        "id": 8100, "key": "domination", "name": "Domination",
         "slots": [
             [
                 {"id": 8112, "name": "Electrocute", "dmg": True, "note": "proc damage"},
@@ -69,7 +71,7 @@ RUNE_PATHS = [
         ],
     },
     {
-        "id": 8200, "key": "Sorcery", "name": "Sorcery",
+        "id": 8200, "key": "sorcery", "name": "Sorcery",
         "slots": [
             [
                 {"id": 8214, "name": "Summon Aery", "dmg": True, "note": "proc damage"},
@@ -101,7 +103,7 @@ RUNE_PATHS = [
         ],
     },
     {
-        "id": 8400, "key": "Resolve", "name": "Resolve",
+        "id": 8400, "key": "resolve", "name": "Resolve",
         "slots": [
             [
                 {"id": 8437, "name": "Grasp of the Undying", "dmg": True, "note": "on-attack magic proc"},
@@ -128,7 +130,7 @@ RUNE_PATHS = [
         ],
     },
     {
-        "id": 8300, "key": "Inspiration", "name": "Inspiration",
+        "id": 8300, "key": "inspiration", "name": "Inspiration",
         "slots": [
             [
                 {"id": 8351, "name": "Glacial Augment", "dmg": False, "note": "slow/utility"},
@@ -161,6 +163,33 @@ RUNE_PATHS = [
 # "Based on level" pairs store the exact level-1 and level-18 references.
 # The engine preserves that slope at top-quest levels 19-20 instead of clamping.
 # "Adaptive" damage/stats resolve to physical/AD if bonus AD > AP, else magic/AP.
+def _stable_key(name):
+    """Build a readable, JSON-safe public key while retaining Riot IDs."""
+    normalized = name.lower().replace("'", "")
+    return re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+
+
+# Public payloads use readable keys like items do. Numeric Riot IDs remain in
+# the catalog for icon/source metadata and inside the combat engine.
+for _path in RUNE_PATHS:
+    _path["key"] = _stable_key(_path.get("key", _path["name"]))
+    for _slot in _path["slots"]:
+        for _rune in _slot:
+            _rune["key"] = _rune.get("key") or _stable_key(_rune["name"])
+
+RUNE_KEY_TO_ID = {
+    rune["key"]: rune["id"]
+    for path in RUNE_PATHS for slot in path["slots"] for rune in slot
+}
+RUNE_ID_TO_KEY = {rune_id: key for key, rune_id in RUNE_KEY_TO_ID.items()}
+RUNE_PATH_KEY_TO_ID = {path["key"]: path["id"] for path in RUNE_PATHS}
+
+_rune_count = sum(
+    len(slot) for path in RUNE_PATHS for slot in path["slots"])
+if len(RUNE_KEY_TO_ID) != _rune_count:
+    raise ValueError("Rune public keys must be unique")
+
+
 RUNE_MATH = {
     # Fleet Footwork: a fully Energized attack grants 20% melee / 15% ranged
     # bonus movement speed for 1 second. The simulator can start Energized.
@@ -332,7 +361,8 @@ def runes_for_api():
             "icon": f"icons/runes/path_{p['id']}.png?v={ICON_VERSION}",
             "slots": [
                 [{
-                    "id": r["id"], "name": r["name"], "dmg": r["dmg"],
+                    "key": r["key"], "id": r["id"], "name": r["name"],
+                    "dmg": r["dmg"],
                     "note": r["note"],
                     "icon": f"icons/runes/{r['id']}.png?v={ICON_VERSION}",
                     "has_math": r["id"] in RUNE_MATH,

@@ -4,6 +4,7 @@ import math
 import threading
 import unittest
 
+from backend.data.runes_data import runes_for_api
 from backend.main import (
     Handler,
     MAX_BODY_BYTES,
@@ -39,6 +40,16 @@ def minimal_payload():
 
 
 class SecurityValidationTests(unittest.TestCase):
+    def test_rune_catalog_exposes_keys_and_retains_riot_ids_as_metadata(self):
+        catalog = runes_for_api()
+        precision = next(
+            path for path in catalog["paths"] if path["key"] == "precision")
+        fleet = next(
+            rune for slot in precision["slots"] for rune in slot
+            if rune["key"] == "fleet_footwork")
+        self.assertEqual(precision["id"], 8000)
+        self.assertEqual(fleet["id"], 8021)
+
     def test_normal_frontend_shards_remain_valid(self):
         payload = minimal_payload()
         payload["builds"][0]["runes"]["shards"] = [
@@ -49,6 +60,23 @@ class SecurityValidationTests(unittest.TestCase):
             validated["builds"][0]["runes"]["shards"],
             ["adaptive", "adaptive", "health"],
         )
+
+    def test_public_runes_use_readable_keys_instead_of_numeric_ids(self):
+        payload = minimal_payload()
+        payload["builds"][0]["runes"].update({
+            "primary": "precision",
+            "secondary": "sorcery",
+            "selected": ["fleet_footwork", "legend_alacrity"],
+        })
+        validated = validate_simulation_payload(payload)
+        self.assertEqual(
+            validated["builds"][0]["runes"]["selected"],
+            ["fleet_footwork", "legend_alacrity"],
+        )
+
+        payload["builds"][0]["runes"]["selected"] = [8021]
+        with self.assertRaisesRegex(RequestValidationError, "rune key"):
+            validate_simulation_payload(payload)
 
     def test_public_collection_limits_are_enforced(self):
         payload = minimal_payload()
@@ -154,8 +182,9 @@ class SecurityHTTPTests(unittest.TestCase):
     def test_normal_frontend_payload_is_accepted(self):
         payload = minimal_payload()
         payload["builds"][0]["runes"].update({
-            "primary": 8000,
-            "secondary": 8200,
+            "primary": "precision",
+            "secondary": "sorcery",
+            "selected": ["fleet_footwork", "legend_alacrity"],
             "shards": ["adaptive", "adaptive", "health"],
         })
         connection = self.connection()
