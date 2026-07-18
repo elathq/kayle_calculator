@@ -3,7 +3,8 @@
 Interactive DPS calculator for Kayle: compare multiple item builds side by side
 against a simulated enemy, using a freely composable combo sequence.
 
-**Zero dependencies** — pure Python standard library + vanilla HTML/CSS/JS.
+**Zero runtime dependencies** — pure Python standard library + vanilla
+HTML/CSS/JS. The optional icon-maintenance tool uses Pillow.
 
 ## Run
 
@@ -12,6 +13,36 @@ python run.py
 ```
 
 Then open http://127.0.0.1:8000
+
+## Hosting and performance
+
+The server returns the initial item/rune/champion/enemy data in one compressed
+`/api/bootstrap` response. Versioned JavaScript, CSS, and icon files use a
+one-year immutable browser cache; `index.html` revalidates so deployments still
+pick up a new asset version. This avoids downloading the full icon catalog on
+every visit. Static text and larger JSON responses are gzip-compressed when the
+client supports it, and `/healthz` provides a lightweight monitoring endpoint.
+
+After adding or replacing icons, optimize them from the project root with:
+
+```
+python tools/optimize_icons.py
+```
+
+The production app does not need Pillow. Only this maintenance command does.
+Render automatically versions JavaScript and CSS with the current Git commit.
+If icon content changes, update `ICON_VERSION` once in
+`backend/data/__init__.py` so existing browsers receive the new files
+immediately.
+
+Render Free web services spin down after 15 minutes without inbound traffic
+and can take about a minute to wake. Render's supported always-on option is a
+paid service instance; paid instances do not spin down. An external uptime
+monitor can request `/healthz` more often than every 15 minutes, but that keeps
+the Free instance consuming its monthly instance-hour allowance and is not as
+reliable as an always-on paid instance. See Render's
+[Free service documentation](https://render.com/docs/free) and
+[FAQ](https://render.com/docs/faq).
 
 ## Structure
 
@@ -39,7 +70,9 @@ Then open http://127.0.0.1:8000
 ## API
 
 - `GET /api/champion?level=N` — Kayle stats + default ability ranks
+- `GET /api/bootstrap?level=N&preset=K` — combined initial UI payload
 - `GET /api/items` — item catalog
+- `GET /healthz` — lightweight service health check
 - `GET /api/enemy_presets`, `GET /api/enemy_preset?preset=K&level=N`
 - `POST /api/simulate` — `{level, ability_ranks, builds, enemy, combo, options}` → per-build results.
   Enemy accepts `hp` (maximum HP), optional `current_hp` (starting HP), and

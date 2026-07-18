@@ -9,6 +9,8 @@ move_speed_flat, move_speed_pct, crit_chance (%), crit_damage_bonus (%),
 tenacity (%), omnivamp (fraction).
 """
 
+from . import ICON_VERSION
+
 ICON_CDN = "https://cdn.communitydragon.org/latest/item/{id}"
 
 # ---------------------------------------------------------------------------
@@ -651,7 +653,7 @@ def item_list_for_api():
             "stats": it["stats"],
             "tags": it["tags"],
             "passive_text": it["passive_text"],
-            "icon": f"icons/{it['id']}.png",
+            "icon": f"icons/{it['id']}.png?v={ICON_VERSION}",
             "icon_fallback": ICON_CDN.format(id=it["id"]),
             "has_active": "active" in it,
             "active_kind": it.get("active", {}).get("kind"),

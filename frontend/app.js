@@ -24,10 +24,15 @@ const $ = (id) => document.getElementById(id);
 /* ================= init ================= */
 
 async function init() {
-  ITEMS = await (await fetch(`${API}/api/items`)).json();
+  // One compressed request replaces the five serial requests needed for the
+  // initial catalog, runes, champion progression, and enemy preset.
+  const bootstrap = await (await fetch(
+    `${API}/api/bootstrap?level=${state.level}&preset=${state.enemyPreset}`)).json();
+
+  ITEMS = bootstrap.items;
   ITEMS.forEach((it) => (ITEM_BY_KEY[it.key] = it));
 
-  const runeData = await (await fetch(`${API}/api/runes`)).json();
+  const runeData = bootstrap.runes;
   RUNES = runeData.paths;
   SHARDS = runeData.shards;
   for (const p of RUNES) {
@@ -36,7 +41,7 @@ async function init() {
       slot.forEach((r) => (RUNE_BY_ID[r.id] = { ...r, pathId: p.id, row })));
   }
 
-  const presets = await (await fetch(`${API}/api/enemy_presets`)).json();
+  const presets = bootstrap.enemy_presets;
   const sel = $("enemyPreset");
   presets.forEach((p) => {
     const o = document.createElement("option");
@@ -46,8 +51,10 @@ async function init() {
   });
   sel.value = state.enemyPreset;
 
+  state.ranks = bootstrap.champion.default_ranks;
   buildRankSelects();
-  await applyAutoRanks();
+  for (const ab of ["Q", "W", "E", "R"]) $("rank" + ab).value = state.ranks[ab];
+  applyEnemyData(bootstrap.enemy);
   addBuild();                   // start with one build
   renderPalette();
   renderCombo();
@@ -84,8 +91,6 @@ async function init() {
     if (!$("itemOverlay").classList.contains("hidden")) closeOverlay();
     if (!$("runeOverlay").classList.contains("hidden")) closeRuneEditor();
   });
-
-  await onPresetChange();
 }
 
 /* ================= config ================= */
@@ -161,6 +166,10 @@ async function onPresetChange() {
   state.enemyPreset = $("enemyPreset").value;
   const data = await (await fetch(
     `${API}/api/enemy_preset?preset=${state.enemyPreset}&level=${state.level}`)).json();
+  applyEnemyData(data);
+}
+
+function applyEnemyData(data) {
   $("enemyHp").value = data.hp;
   $("enemyCurrentHp").value = data.hp;
   $("enemyBonusHp").value = data.bonus_hp || 0;
@@ -232,8 +241,8 @@ function renderBuilds() {
     const primIcon = b.runes ? PATH_BY_ID[b.runes.primary].icon : "";
     const secIcon = b.runes ? PATH_BY_ID[b.runes.secondary].icon : "";
     runeBtn.innerHTML = ks
-      ? `<img src="${ks.icon}"><img src="${secIcon}" style="width:16px;height:16px">`
-      : `<img src="${primIcon}"><span>Runes</span>`;
+      ? `<img src="${ks.icon}" decoding="async"><img src="${secIcon}" decoding="async" style="width:16px;height:16px">`
+      : `<img src="${primIcon}" decoding="async"><span>Runes</span>`;
     runeBtn.addEventListener("click", (e) => { e.stopPropagation(); openRuneEditor(b.id); });
 
     const cost = document.createElement("span");
@@ -259,7 +268,7 @@ function renderBuilds() {
       slot.className = "slot" + (key ? " filled" : "");
       slot.title = key ? ITEM_BY_KEY[key].name : "Add item";
       slot.innerHTML = key
-        ? `<img src="${ITEM_BY_KEY[key].icon}" alt="${ITEM_BY_KEY[key].name}"
+        ? `<img src="${ITEM_BY_KEY[key].icon}" alt="${ITEM_BY_KEY[key].name}" decoding="async"
               onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${ITEM_BY_KEY[key].icon_fallback}'}else{this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ITEM_BY_KEY[key].name.slice(0, 2)}',className:'plus'}))}">`
         : `<span class="plus">+</span>`;
       slot.addEventListener("click", () => openOverlay(b.id, idx));
@@ -302,7 +311,7 @@ function openOverlay(buildId, slotIdx) {
       return `${val} ${label}`;
     }).join(" · ");
     tile.innerHTML = `
-      <img src="${it.icon}" alt="${it.name}"
+      <img src="${it.icon}" alt="${it.name}" loading="lazy" decoding="async"
         onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${it.icon_fallback}'}else{this.style.visibility='hidden'}">
       <span class="iname">${it.name}</span>
       <span class="icost">${it.cost.toLocaleString()} g</span>
@@ -360,7 +369,7 @@ function runeOptEl(r, selected, onClick) {
   el.title = r.note + (r.dmg && !r.has_math ? " — math pending" : "");
   el.setAttribute("aria-pressed", selected ? "true" : "false");
   el.setAttribute("aria-label", `${r.name}${selected ? ", selected" : ", not selected"}`);
-  el.innerHTML = `<img src="${r.icon}" alt="${r.name}">
+  el.innerHTML = `<img src="${r.icon}" alt="${r.name}" loading="lazy" decoding="async">
     ${r.dmg ? '<span class="dmg-dot"></span>' : ""}<span>${r.name}</span>`;
   el.addEventListener("click", onClick);
   return el;
@@ -386,7 +395,7 @@ function renderRuneEditor() {
     tab.title = p.name;
     tab.setAttribute("aria-label", `${p.name} primary path`);
     tab.setAttribute("aria-pressed", p.id === R.primary ? "true" : "false");
-    tab.innerHTML = `<img src="${p.icon}">`;
+    tab.innerHTML = `<img src="${p.icon}" alt="" loading="lazy" decoding="async">`;
     tab.addEventListener("click", () => {
       if (R.primary === p.id) return;
       R.primary = p.id;
@@ -431,7 +440,7 @@ function renderRuneEditor() {
     tab.title = p.name;
     tab.setAttribute("aria-label", `${p.name} secondary path`);
     tab.setAttribute("aria-pressed", p.id === R.secondary ? "true" : "false");
-    tab.innerHTML = `<img src="${p.icon}">`;
+    tab.innerHTML = `<img src="${p.icon}" alt="" loading="lazy" decoding="async">`;
     tab.addEventListener("click", () => {
       if (R.secondary === p.id) return;
       R.secondary = p.id;
@@ -481,7 +490,7 @@ function renderRuneEditor() {
       el.title = opt.text;
       el.setAttribute("aria-pressed", R.shards[row] === opt.key ? "true" : "false");
       el.setAttribute("aria-label", `${opt.name}${R.shards[row] === opt.key ? ", selected" : ", not selected"}`);
-      el.innerHTML = `<img src="${opt.icon}" alt="${opt.name}">
+      el.innerHTML = `<img src="${opt.icon}" alt="${opt.name}" loading="lazy" decoding="async">
         ${opt.combat ? '<span class="dmg-dot"></span>' : ""}<span>${opt.name}</span>`;
       el.addEventListener("click", () => { R.shards[row] = opt.key; renderRuneEditor(); });
       rowEl.appendChild(el);
@@ -552,6 +561,8 @@ function renderPalette() {
     if (action.type === "ITEM_ACTIVE") {
       const img = document.createElement("img");
       img.src = ITEM_BY_KEY[action.item].icon;
+      img.loading = "lazy";
+      img.decoding = "async";
       img.onerror = () => (img.style.display = "none");
       chip.appendChild(img);
     }
@@ -578,6 +589,8 @@ function renderCombo() {
     if (action.type === "ITEM_ACTIVE") {
       const img = document.createElement("img");
       img.src = ITEM_BY_KEY[action.item].icon;
+      img.loading = "lazy";
+      img.decoding = "async";
       img.onerror = () => (img.style.display = "none");
       chip.appendChild(img);
     }
@@ -717,7 +730,7 @@ function renderResults(results) {
     card.className = "result-card" + (isBest ? " is-best" : "");
 
     const icons = r.items.map((k) =>
-      `<img src="${ITEM_BY_KEY[k].icon}" title="${ITEM_BY_KEY[k].name}"
+      `<img src="${ITEM_BY_KEY[k].icon}" title="${ITEM_BY_KEY[k].name}" loading="lazy" decoding="async"
         onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${ITEM_BY_KEY[k].icon_fallback}'}else{this.style.visibility='hidden'}">`).join("");
 
     const t = r.totals;

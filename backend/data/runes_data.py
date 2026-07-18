@@ -7,6 +7,8 @@ be wired into the engine once the user provides each rune's math.
 Everything else is selectable in the UI but purely visual.
 """
 
+from . import ICON_VERSION
+
 RUNE_PATHS = [
     {
         "id": 8000, "key": "Precision", "name": "Precision",
@@ -318,7 +320,7 @@ def runes_for_api():
     shards = [
         {
             "name": slot["name"],
-            "options": [{**o, "icon": f"icons/runes/{o['icon']}.png"}
+            "options": [{**o, "icon": f"icons/runes/{o['icon']}.png?v={ICON_VERSION}"}
                         for o in slot["options"]],
         }
         for slot in SHARDS
@@ -327,12 +329,12 @@ def runes_for_api():
     for p in RUNE_PATHS:
         out.append({
             "id": p["id"], "key": p["key"], "name": p["name"],
-            "icon": f"icons/runes/path_{p['id']}.png",
+            "icon": f"icons/runes/path_{p['id']}.png?v={ICON_VERSION}",
             "slots": [
                 [{
                     "id": r["id"], "name": r["name"], "dmg": r["dmg"],
                     "note": r["note"],
-                    "icon": f"icons/runes/{r['id']}.png",
+                    "icon": f"icons/runes/{r['id']}.png?v={ICON_VERSION}",
                     "has_math": r["id"] in RUNE_MATH,
                 } for r in slot]
                 for slot in p["slots"]

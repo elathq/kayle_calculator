@@ -1,5 +1,6 @@
 import unittest
 
+from backend.data import ICON_VERSION
 from backend.data.items_data import ITEMS, item_list_for_api, validate_item_catalog
 from backend.data.kayle_data import KAYLE_AS, default_ability_ranks, kayle_stats_at
 from backend.engine import Simulation, simulate_build
@@ -58,7 +59,10 @@ class AddedItemTests(unittest.TestCase):
             self.assertIn(key, ITEMS)
             self.assertIn(key, api)
             self.assertEqual(api[key]["id"], item_id)
-            self.assertEqual(api[key]["icon"], f"icons/{item_id}.png")
+            self.assertEqual(
+                api[key]["icon"],
+                f"icons/{item_id}.png?v={ICON_VERSION}",
+            )
 
     def test_current_base_stats_and_item_families(self):
         self.assertEqual(ITEMS["cosmic_drive"]["stats"], {
