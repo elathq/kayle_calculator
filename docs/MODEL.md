@@ -1,403 +1,659 @@
 # Simulation model
 
-This document describes what the engine calculates, the ordering it uses, and
-the assumptions it makes. It is intentionally separate from the
-[validation record](VALIDATION.md): this file documents implementation behavior;
-the validation record documents the evidence for that behavior.
+This document is the engine specification. It describes formulas, event order,
+snapshots, and deliberate assumptions. Practice Tool evidence belongs in
+[Validation and backtesting](VALIDATION.md); external references belong in
+[Data and icon sources](SOURCES.md).
 
-## Scope and outputs
+## Outputs
 
-Each build receives the same Kayle level, ability ranks, target, scenario
-options, and ordered combo. The engine advances a combat timeline and returns:
+Every build receives the same champion setup, target, scenario, and action
+sequence. The engine returns damage by type, total damage, DPS, burst, healing,
+kill time, remaining target HP, final stats, the event timeline, and warnings.
 
-- exact total physical, magic, and true damage;
-- whole-combo DPS using the completed timeline duration;
-- the highest applied damage in any rolling one-second window;
-- healing, kill time, and remaining target HP;
-- final combat stats and penetration;
-- every damage/note event in execution order; and
-- warnings for cooldown or mutually exclusive item violations.
+```text
+combo DPS = total applied damage / completed timeline duration
 
-The engine simulates the combo as entered. A cooldown warning does not remove
-an action because the tool is also used to isolate formulas and intentionally
-illegal sequences.
+burst = maximum applied damage in any rolling 1.0 s window
+```
 
-## Precision and display rounding
+The entered sequence always executes. Cooldown conflicts produce warnings so
+the calculator can still isolate intentionally invalid sequences.
 
-There is one combat pipeline:
+## Precision and damage pipeline
+
+All calculations remain fractional. The UI may shorten displayed values, but
+HP, thresholds, healing, totals, DPS, and later snapshots use exact values.
 
 ```text
 raw damage
-→ outgoing modifiers
-→ resistance reduction
-→ percentage penetration
-→ flat penetration
-→ mitigation
-→ exact applied damage
+  -> outgoing modifiers
+  -> resistance reduction
+  -> percentage penetration
+  -> flat penetration
+  -> resistance multiplier
+  -> exact applied damage
 ```
 
-No stage rounds damage. Fractional HP is retained for missing-health scaling,
-threshold checks, subsequent hits, healing, totals, DPS, and burst. The UI may
-format results for readability, but its event timeline exposes the exact raw
-damage, effective resistance, and applied damage used by the simulation.
+League can round floating combat text, target HP, and the Practice Tool total
+independently. The simulator does not maintain a second integer-damage model.
 
-League's floating combat text, target HP display, and Practice Tool total are
-independently rounded presentation values. They can disagree with each other by
-one point without implying an integer-per-instance damage system. See
-[Validation and backtesting](VALIDATION.md#practice-tool-validation-protocol).
+## Champion progression
 
-## Champion progression and timing
+### Base-stat growth
 
-- Kayle's base statistics use League's non-linear per-level growth formula.
-- The supported level range is 1–20. Levels 19–20 represent the top-lane role
-  quest and preserve the original per-level slope for level-scaled runes.
-- Default ability order is E, Q, W, then Q > E > W, with R at levels 6, 11,
-  and 16.
-- Passive breakpoints occur at levels 1, 6, 11, and 16.
-- Total attack speed is `0.625 + 0.667 × bonus AS / 100`, normally capped at
-  2.50. Hail of Blades can exceed the normal cap while active.
-- Attack speed determines attack spacing, combo duration, and DPS.
-- R finishes its 0.5-second cast before the combo continues; its damage lands
-  2.5 seconds after the cast begins.
-- Delayed effects are resolved after the final user-entered action, including R,
-  Stormsurge, Phantom Hit, Comet, Scorch, and burn ticks.
+```text
+n = level - 1
+stat(level) = base + growth * n * (0.7025 + 0.0175 * n)
 
-## Basic attacks, passive, and abilities
+supported level = 1..20
+```
 
-### Attack ordering
+Kayle's base data:
 
-A normal attack resolves the applicable layers in this model:
+```text
+health             = 670 + 92 growth
+mana               = 330 + 50 growth
+health regen       = 5 + 0.5 growth
+mana regen         = 8 + 0.8 growth
+attack damage      = 50 + 2.5 growth
+armor              = 26 + 4.2 growth
+magic resistance   = 22 + 1.3 growth
+base attack speed  = 0.625
+attack-speed ratio = 0.667
+attack speed growth= 1.5%
+windup fraction    = 0.19355
+base crit modifier = 2.0
+movement speed     = 335
+base attack range  = 175
+```
 
-1. Basic physical hit using total AD.
-2. Item on-hit effects.
-3. E's passive magic on-hit.
-4. A primed Spellblade proc.
-5. Kayle's passive fire wave while Aflame and Exalted.
-6. A Rageblade Phantom Hit repeat when due.
+Attack speed:
 
-Effects on the same game frame use the state captured for that frame. A damage
-amplifier or resistance stack triggered by the frame begins affecting later
-eligible damage, not earlier components retroactively.
+```text
+total AS = 0.625 + 0.667 * bonus AS percentage / 100
+normal cap = 2.50
+attack interval = 1 / total AS
+```
 
-### Fire wave
+Hail of Blades may exceed the normal cap. Attack speed controls attack spacing,
+combo duration, and DPS.
 
-Fire-wave base damage is 20 through level 11 and increases by 3 per level from
-level 12. It is 41 at level 18 and 47 at level 20. This is a breakpoint formula,
-not a level-1-to-18 interpolation.
+Default rank path:
+
+```text
+level:  1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18
+rank:   E Q W Q Q R Q E Q E  R  E  E  W  W  R  W  W
+```
+
+Role-quest extension:
+
+```text
+levels 19..20 = top-lane quest extension
+level-scaled effects preserve their original per-level slope
+```
+
+### Passive
+
+```text
+Zeal AS per stack       = 6%
+Zeal maximum stacks     = 5
+Exalted movement speed  = 10%
+
+level 1  = Zeal
+level 6  = range 525
+level 11 = Aflame fire wave
+level 16 = range 625 and permanent Exalted
+
+fire-wave base(level) = 20 + 3 * max(0, level - 11)
+fire-wave raw magic   = fire-wave base + 0.10 * bonus AD + 0.25 * AP
+```
 
 ### Q — Radiant Blast
 
-Q deals its own damage against the target's pre-hit resistance, then applies
-15% armor and magic-resistance reduction for later damage. If Q appears before
-E in the combo, the simulator assumes Q has already hit before E: Q damage,
-shred, and missing-HP contribution all apply. Projectile distance and travel
-time are intentionally not inputs.
+```text
+rank                       = 1      2      3      4      5
+base magic                 = 60     90     120    150    180
+cooldown                   = 12     11     10     9      8 s
+mana                       = 60     70     80     90     100
+
+raw magic = base + 0.60 * bonus AD + 0.50 * AP
+armor reduction = 15%
+MR reduction    = 15%
+reduction duration = 4 s
+cast time = windup fraction / total AS
+```
+
+Q damage uses pre-hit resistance. Its reduction begins after its damage frame.
+When Q precedes E, the model assumes Q has already landed.
 
 ### W — Celestial Blessing
 
-W applies its rank- and AP-scaled heal and grants rank-based movement speed plus
-8 percentage points per 100 AP for two seconds. Every later action recalculates
-AP, movement speed, and Swiftmarch adaptive force at that action's timestamp.
-Actions after the window expires lose the bonus automatically.
+```text
+rank                    = 1      2      3      4      5
+base heal               = 55     80     105    130    155
+base movement bonus     = 24%    28%    32%    36%    40%
+mana                    = 70     75     80     85     90
+
+heal = base heal + 0.25 * AP
+movement bonus = base movement bonus + 8 percentage points * AP / 100
+buff duration = 2 s
+cooldown = 15 s
+cast time = 0.25 s
+```
+
+Later actions recalculate movement speed, adaptive force, and AP at their own
+timestamps. The bonus disappears automatically after expiry.
 
 ### E — Starfire Spellblade
 
-The public combo has one E action and one formula. E is an empowered basic
-attack and attack reset: it includes the physical hit and one normal on-hit
-package, then applies its missing-health damage.
+```text
+rank                         = 1       2       3       4       5
+passive base magic           = 15      20      25      30      35
+missing-HP base              = 8%      8.5%    9%      9.5%    10%
+cooldown                     = 8       7.5     7       6.5     6 s
 
-- E primes and may immediately consume Spellblade.
-- At level 11+, its explosion does not create another PTA application or a
-  second normal on-hit package.
-- Its missing-health percentage gains 1.5 percentage points per 100 AP.
-- Without Rageblade, missing-health damage reads the target state before the
-  empowered attack.
-- With Rageblade, it reads after E's physical hit.
-- When the fast reset triggers Phantom Hit, it reads after the physical hit and
-  normal on-hit package. The Phantom repeat remains a separate later event.
-- Same-frame damage is not amplified by the PTA proc that frame triggers.
+passive raw magic = base + 0.10 * bonus AD + 0.20 * AP
+active missing-HP rate = base rate + 1.5 percentage points * AP / 100
+active raw magic = target missing HP * active missing-HP rate
+cast time = 0 s
+```
 
-The waited Rageblade ordering observed during validation remains an internal
-regression case, not a second UI action.
+E is one empowered basic attack and attack reset. It includes the physical hit,
+one normal on-hit package, and the active missing-health damage. It primes and
+may consume Spellblade.
+
+```text
+without Rageblade:
+  missing-HP snapshot = before empowered attack
+
+with Rageblade, no Phantom trigger:
+  missing-HP snapshot = after physical hit
+
+with Rageblade, fast Phantom-triggering reset:
+  missing-HP snapshot = after physical hit + normal on-hit package
+```
+
+The explosion does not create a second on-hit package or another PTA stack.
+Same-frame damage does not receive an amplifier triggered by that frame. A
+waited ordering exists only as an internal regression case; the UI exposes one
+E action.
 
 ### R — Divine Judgment
 
-R uses its area-of-effect damage formula and delayed impact. R-triggered item
-effects such as Experimental Hexplate and Fiendhunter begin from the modeled R
-cast trigger, while the R damage event lands later.
+```text
+rank                  = 1      2      3
+base magic            = 200    300    400
+cooldown              = 160    120    80 s
+mana                  = 100    50     0
 
-## Target state, resistance, and penetration
+raw magic = base + 1.00 * bonus AD + 0.70 * AP
+cast time = 0.5 s
+impact time = cast start + 2.5 s
+```
 
-Maximum HP, starting HP, and bonus HP are separate target inputs:
+The combo continues after the cast completes. Delayed R damage and other queued
+effects resolve even after the last entered action.
 
-- maximum HP controls thresholds and percentage-of-maximum conditions;
-- starting/current HP controls live missing-health damage and kill state; and
-- bonus HP controls Lord Dominik's Regards.
+## Attack event order
 
-Resistance resolution is:
+A normal attack resolves these layers:
 
-1. Q and Bloodletter percentage reductions.
-2. Percentage penetration, including Terminus.
-3. Flat penetration.
-4. The resistance multiplier.
+- Basic physical hit using total AD.
+- Item on-hits.
+- E passive on-hit.
+- Primed Spellblade.
+- Passive fire wave while eligible.
+- Phantom Hit repeat when due.
 
-For non-negative resistance, mitigation uses `100 / (100 + resistance)`.
-Negative resistance uses League's separate negative-resistance curve. Effective
-resistance and damage remain fractional.
+All components on one frame use the state captured at that frame's start.
+Stacks or amplifiers earned there affect later eligible frames.
 
-Shadowflame crit multiplies eligible magic and true damage by 1.2 only when the
-target is strictly below 40% maximum HP at the frame snapshot. Crossing the
-threshold during a multi-component frame does not retroactively change the
-other components on that frame.
+## Target, resistance, and penetration
 
-## Adaptive force and movement speed
+The target stores maximum HP, current HP, and bonus HP separately. Thresholds
+read maximum HP, missing-health effects read current HP, and LDR reads bonus HP.
 
-Adaptive effects become AD/physical when item AD is greater than item AP;
-otherwise they become AP/magic. One point of adaptive force grants 1 AP or 0.6
-AD. A zero-item-AD/zero-item-AP tie resolves to AD for Kayle, matching the Rapid
-Firecannon Practice Tool isolation. Rabadon's multiplies AP produced by adaptive
-effects.
+```text
+R0 = listed resistance
+R1 = R0 * (1 - percentage reduction)
 
-Movement speed is calculated in this order:
+if R1 >= 0:
+  R2 = R1 * (1 - percentage penetration)
+  effective resistance = max(0, R2 - flat penetration)
+else:
+  effective resistance = R1
 
-1. Base movement speed plus flat bonuses.
-2. Additive percentage bonuses.
-3. Multiplicative total-movement-speed bonuses.
-4. League's 415 and 490 soft caps.
+if effective resistance >= 0:
+  resistance multiplier = 100 / (100 + effective resistance)
+else:
+  resistance multiplier = 2 - 100 / (100 - effective resistance)
 
-Celerity grants 1% movement speed and makes eligible flat, additive, and
-multiplicative bonuses 7% stronger. Magical Footwear adds 10 flat movement speed
-to Boots. Waterwalking adds 10 flat movement speed and level-scaled adaptive
-stats while the river option is enabled. These effects, the movement-speed
-shard, Relentless Hunter, Fleet, Stormraider's Surge, Approach Velocity, W, item
-passives, and item actives feed the same timestamped calculation.
+applied damage = raw damage * outgoing multiplier * resistance multiplier
+true-damage resistance multiplier = 1
+```
 
-Swiftmarch grants 65 movement speed and adaptive force equal to 5% of current
-displayed movement speed after the soft caps. It therefore recalculates during
-W, Fleet, Stormrazor, Cosmic Drive, Stormsurge, and Experimental Hexplate
-windows. The mid-lane role quest also multiplies all bonus AD and AP by 1.08 and
-is activated only by an equipped evolved mid-lane boot.
+Shadowflame reads HP at the frame snapshot:
 
-Swiftmarch and Spellslinger's Shoes are illegal at levels 19–20 because those
-levels require the mutually exclusive top-lane quest. The engine ignores the
-illegal evolved boot and returns a warning.
+```text
+condition = current HP < 0.40 * maximum HP
+eligible magic/true multiplier = 1.20
+```
 
-Fleet's visible movement-speed update is delayed by approximately 0.1 seconds
-in the measured interaction. When Fleet is selected, the engine automatically
-synchronizes that update before the next user action. There is no public wait
-utility solely for Fleet synchronization.
+Crossing the threshold during a frame does not change earlier components from
+that frame.
 
-## Item mechanics
+## Movement speed and adaptive force
 
-### Item families
+```text
+uncapped MS = (base MS + flat MS) * (1 + additive MS%)
+uncapped MS = uncapped MS * multiplicative total-MS effects
 
-The engine applies a maximum of one item from each registered exclusive family,
-including Boots, Starter, Spellblade, Blight, and Fatality. Extra conflicting
-items are ignored with a warning. The UI permits six item slots but cannot make
-an otherwise illegal family combination valid.
+if 415 < uncapped MS <= 490:
+  displayed MS = 415 + 0.80 * (uncapped MS - 415)
 
-### Boots and magic penetration
+if uncapped MS > 490:
+  displayed MS = 415 + 0.80 * 75 + 0.50 * (uncapped MS - 490)
+```
 
-- Sorcerer's Shoes: 12 flat magic penetration.
-- Spellslinger's Shoes: 18 flat and 8% magic penetration, plus the mid-role
-  quest reward.
-- Swiftmarch: 65 movement speed, 5%-of-current-MS adaptive force, and the
-  mid-role quest reward.
+Celerity modifies eligible movement bonuses before the soft cap:
 
-### Spellblade
+```text
+personal MS multiplier = 1.01
+eligible flat/additive/multiplicative bonuses *= 1.07
+```
 
-An ability primes Spellblade; the next attack consumes it subject to a
-1.5-second internal cooldown. Lich Bane grants 50% attack speed while primed.
-Dusk and Dawn deals Spellblade damage, heals, and repeats on-hit effects once,
-including a PTA application. Essence Reaver deals physical Spellblade damage
-equal to 125% base AD plus 0.5% base AD per percentage point of total critical
-strike chance. Mana restoration is not modeled.
+Adaptive conversion:
 
-### Rageblade
+```text
+1 adaptive-force point = 1 AP or 0.6 AD
 
-Rageblade builds Seething stacks and begins Phantom Hit after two attacks made
-while already at maximum stacks. From zero stacks, the first Phantom Hit is on
-attack 7 and later repeats are on attacks 10, 13, and so on. Phantom Hit
-reapplies the eligible on-hit package after its modeled delay.
+if item AD > item AP:
+  adaptive force -> AD
+else if item AP > item AD:
+  adaptive force -> AP
+else:
+  zero-stat tie -> AD for Kayle
+```
 
-### Extended-fight and penetration items
+Rabadon's multiplier also applies to adaptive AP.
 
-- Riftmaker converts 2% bonus HP to AP, gains 2% damage per whole second after
-  entering champion combat up to 8%, and enables 10% melee / 6% ranged
-  omnivamp at maximum stacks.
-- Kraken Slayer procs every third on-hit application. It reads target missing
-  HP at the start of the triggering attack's damage frame.
-- Terminus starts with Light and alternates Light/Dark. Dark grants 10% armor
-  and magic penetration after attacks 2, 4, and 6, reaching 30%; a triggering
-  fire wave still uses the prior stack count.
-- Bloodletter's Curse applies one 7.5% MR-reduction stack per eligible cast
-  instance, up to 30%, subject to its 0.3-second gate. E passive and fire wave
-  are separate eligible instances, while same-frame damage uses the prior
-  frame's stack count.
-- Lord Dominik's Regards gains 1% damage per 100 target bonus HP, capped at 15%
-  for 1500 bonus HP.
+Swiftmarch and the mid-role reward:
 
-### Energized and movement items
+```text
+Swiftmarch flat MS = 65
+Swiftmarch adaptive force = 0.05 * current displayed MS
+mid-role bonus AD/AP multiplier = 1.08
 
-Fleet, Statikk Shiv, Stormrazor, and Rapid Firecannon share the “Energized
-effects start ready” scenario control.
+evolved mid-role boots are illegal at level 19..20
+```
 
-- Statikk deals one 60-magic-damage champion proc; secondary targets are not
-  simulated.
-- Stormrazor deals 100 magic damage and grants its movement-speed window.
-- Rapid Firecannon deals 40 magic damage and grants 35% bonus range capped at
-  +150 for that Energized attack.
-- Cosmic Drive grants 20 flat movement speed for four seconds after eligible
-  magic or true damage.
-- Stormsurge tracks 25% target-maximum-HP damage within 2.5 seconds, grants its
-  movement window, and resolves Squall two seconds later even if the entered
-  combo has ended.
-- Experimental Hexplate grants ranged Kayle 35% attack speed and 14% movement
-  speed for eight seconds after R. Its 50%/20% values are melee-only.
+Every active movement effect feeds the same timestamped calculation. Fleet's
+measured delayed display update is synchronized automatically before the next
+action when Fleet is selected.
 
-All active movement windows feed Swiftmarch at the action timestamp.
+## Item formulas
 
-### Critical strikes and attack modifiers
+Only mechanics that change the simulation are listed here. Static item stats
+live in `backend/data/items_data.py` and their external references are in
+[Data and icon sources](SOURCES.md).
 
-Random item critical-strike chance is represented as expected damage so build
-comparisons are repeatable. Infinity Edge adds 30 percentage points to total
-critical damage. Kayle's basic hit and fire wave share the expected modifier.
+### Shop families and boots
 
-Fiendhunter's first three attacks after R gain 50% attack speed and use its
-separate 80%-total-crit rule. Attacks that naturally crit use full critical
-damage and add 15% true damage; the simulator weights that branch by natural
-crit chance. Yun Tal starts fully trained by default; its option can start it at
-zero and add 0.4% crit per melee or 0.2% per ranged attack, capped at 25%.
+Only one item from each exclusive family is applied. Extra conflicting items
+are ignored with a warning.
 
-### Cooldown and range mechanics
+```text
+exclusive families = Boots, Starter, Spellblade, Blight, Fatality
 
-- Navori reduces live remaining Q/W/E cooldowns by 15% on every attack,
-  including E.
-- Yun Tal's six-second Flurry grants 30% attack speed; attacks reduce its
-  cooldown using expected critical-strike probability.
-- Hexoptics assumes attacks occur at Kayle's current maximum attack range
-  (175/525/625), capped by its 600-unit/10% formula. A ready Rapid Firecannon
-  extends that assumed range for its Energized attack only.
+Boots                 = 25 flat MS
+Sorcerer's Shoes      = 45 flat MS + 12 flat magic penetration
+Spellslinger's Shoes  = 45 flat MS + 18 flat and 8% magic penetration
+Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
+Magical Footwear      = +10 flat MS to equipped Boots
+```
 
-## Rune model
+### Spellblade and on-hit items
 
-Each build can select a keystone, three primary runes, two secondary runes from
-different rows, and one shard from each row. Runes that cannot affect this
-single-target damage simulation remain selectable but contribute no hidden
-combat math.
+```text
+shared Spellblade cooldown = 1.5 s
+
+Dusk and Dawn raw magic = 0.75 * base AD + 0.10 * AP
+Dusk and Dawn heal      = 0.10 * AP + 0.03 * bonus HP
+Dusk and Dawn           = repeat eligible on-hits once
+
+Lich Bane raw magic = 0.75 * base AD + 0.45 * AP
+Lich Bane primed AS = +50%
+
+Essence Reaver raw physical
+  = 1.25 * base AD
+  + 0.005 * base AD * total crit percentage points
+
+Nashor's Tooth raw magic = 15 + 0.15 * AP
+Wit's End raw magic      = 45
+Rageblade raw magic      = 30
+```
+
+Rageblade cadence:
+
+```text
+Seething AS per stack = 8%
+maximum stacks = 4
+Phantom Hit = every 3rd attack while fully primed
+from zero stacks: attacks 7, 10, 13, ...
+repeat delay = 0.15 s
+```
+
+### Extended combat and penetration
+
+```text
+Riftmaker AP = 0.02 * bonus HP
+Riftmaker outgoing bonus = 2% per whole combat second
+Riftmaker maximum bonus = 8%
+Riftmaker max-stack omnivamp = 10% melee / 6% ranged
+
+Kraken trigger = every 3rd eligible on-hit
+Kraken melee base = 150 at level 8 -> 200 at level 18
+Kraken melee base(level) = 150 + 5 * (clamp(level, 8, 20) - 8)
+Kraken ranged base = 0.80 * melee base
+Kraken maximum missing-HP amplification = 75%
+Kraken stack duration = 3 s
+
+Terminus sequence = Light, Dark, Light, Dark, ...
+Dark penetration per stack = 10% armor and MR
+maximum Dark stacks = 3
+maximum penetration = 30%
+stack duration = 5 s
+
+Bloodletter MR reduction per stack = 7.5%
+maximum stacks = 4
+maximum reduction = 30%
+per-cast gate = 0.3 s
+duration = 6 s
+
+LDR outgoing bonus = 1% per 100 target bonus HP
+LDR cap = 15% at 1500 target bonus HP
+
+Hexoptics Magnification = 1% per 60 assumed units
+Hexoptics cap = 10% at 600 units
+assumed attack range = 175 / 525 / 625 by passive stage
+```
+
+Kraken reads target HP before the triggering attack frame. Terminus grants a
+Dark stack after the triggering attack completes. Bloodletter is gated by cast
+instance; E passive and fire wave are separate eligible instances.
+
+### Energized, movement, and delayed effects
+
+Fleet and Energized items share the scenario's ready state.
+
+```text
+Statikk Shiv proc       = 60 raw magic
+Stormrazor proc         = 100 raw magic
+Stormrazor MS           = +45% for 1.5 s
+Rapid Firecannon proc   = 40 raw magic
+Rapid Firecannon range  = +35%, capped at +150
+Cosmic Drive MS         = +20 flat for 4 s
+
+Stormsurge trigger      = 25% target maximum HP within 2.5 s
+Stormsurge MS           = +25% for 1.5 s
+Stormsurge Squall delay = 2 s
+Squall raw magic        = 125 + 0.10 * AP
+
+Hexplate ranged Overdrive AS = +35%
+Hexplate ranged Overdrive MS = +14%
+Hexplate melee Overdrive AS  = +50%
+Hexplate melee Overdrive MS  = +20%
+Overdrive duration = 8 s
+Overdrive cooldown = 30 s
+```
+
+Movement windows recalculate Swiftmarch at each action. Delayed damage remains
+in the result after a short combo ends.
+
+### Critical strikes and cooldown modifiers
+
+Random critical strikes use expected damage.
+
+```text
+expected crit modifier
+  = (1 - crit chance) * 1
+  + crit chance * total crit-damage modifier
+
+Infinity Edge crit-damage bonus = +30 percentage points
+
+Fiendhunter attacks after R = 3
+Fiendhunter window = 8 s
+Fiendhunter AS = +50%
+Fiendhunter forced total-crit modifier = 0.80
+Fiendhunter natural-crit true branch = 15%
+
+Yun Tal trained crit cap = 25%
+training per melee attack = 0.4%
+training per ranged attack = 0.2%
+Flurry AS = +30% for 6 s
+Flurry cooldown = 30 s
+
+Navori remaining Q/W/E cooldown after each attack
+  = previous remaining cooldown * 0.85
+```
+
+Fiendhunter's natural-crit branch is weighted by natural crit chance. Yun Tal
+starts trained unless its scenario option requests an untrained start.
+
+### Other item damage
+
+```text
+Shadowflame threshold/multiplier = below 40% HP / 1.20
+Gunblade base(level) = 175 + (253 - 175) * (clamp(level, 1, 20) - 1) / 17
+Gunblade raw magic = Gunblade base(level) + 0.30 * AP
+Gunblade base at level 19 = 257.588235
+Gunblade base at level 20 = 262.176471
+```
+
+## Rune formulas
+
+Runes that cannot affect this single-target calculation remain visual only.
 
 ### Precision
 
-- Press the Attack receives on-hit stacks from eligible repeats. Its third-hit
-  proc frame does not amplify itself; the 8% amplifier affects later damage.
-- Lethal Tempo adds 6% melee / 4.8% ranged attack speed per stack, up to six
-  stacks. Its bolt increases by 1% per 1% bonus AS for melee and approximately
-  0.8333% per 1% bonus AS for ranged Kayle.
-- Fleet Footwork grants 20% melee / 15% ranged movement speed for one second
-  and therefore can alter Swiftmarch adaptive force.
-- Conqueror grants one stack per ranged attack, two per melee attack, and two
-  per damaging ability cast. A fire wave belongs to the attack's cast instance
-  and does not add a separate stack. Maximum-stack healing uses 8% melee / 5%
-  ranged post-mitigation damage.
-- Legend: Alacrity grants 3% attack speed plus 1.5% per configured stack, up to
-  18%. Legend: Haste reads the same configured stack count separately.
-- Coup de Grace grants 8% damage below 40% target HP; Cut Down grants 8% above
-  60% target HP. Last Stand grants 5% at 40% missing HP, scales linearly to 11%
-  at 70% missing HP, and then remains capped.
+```text
+Press the Attack:
+  trigger stacks = 3
+  proc raw adaptive = 40 at level 1 -> 160 at level 18
+  proc raw adaptive at level 20 = 174.117647
+  later-damage amplifier = 8%
+  cooldown = 6 s
+
+Lethal Tempo:
+  maximum stacks = 6
+  AS per stack = 6% melee / 4.8% ranged
+  bolt base = 9..30 melee / 6..24 ranged
+  bonus-AS ratio = 1.0% melee / 0.8333% ranged per 1% bonus AS
+
+Fleet Footwork:
+  MS = 20% melee / 15% ranged
+  duration = 1 s
+
+Conqueror:
+  maximum stacks = 12
+  attack stacks = 2 melee / 1 ranged
+  damaging ability stacks = 2
+  adaptive per stack = 1.08..2.4 AD or 1.8..4 AP
+  max-stack healing = 8% melee / 5% ranged
+
+Legend: Alacrity:
+  AS = 3% + 1.5% * configured stacks
+  maximum configured stacks = 10
+  maximum AS = 18%
+
+Legend: Haste:
+  basic-ability haste = 1.5 * configured stacks
+  maximum configured stacks = 15
+
+Coup de Grace = +8% damage below 40% target HP
+Cut Down      = +8% damage above 60% target HP
+
+Last Stand:
+  40% missing HP -> +5%
+  50% missing HP -> +7%
+  60% missing HP -> +9%
+  70% missing HP or more -> +11%
+```
+
+PTA's proc frame does not amplify itself. Fire waves share their attack's cast
+instance for Conqueror.
 
 ### Domination
 
-- Electrocute and Dark Harvest use their modeled hit/soul conditions.
-- Relentless Hunter grants 8 flat out-of-combat movement speed per configured
-  stack, up to five, and falls off on the first damage instance.
-- Hail of Blades grants 120% melee / 60% ranged attack speed and can exceed the
-  normal 2.5 cap. E resets can add up to two extra empowered attacks.
-- Cheap Shot checks whether the target was already impaired before the action's
-  own slow. Q, Rylai, and Gunblade can supply impairment.
+```text
+Electrocute raw adaptive = 70..240 + 0.10 * bonus AD + 0.05 * AP
+Electrocute hit window = 3 s
+Electrocute cooldown = 20 s
+
+Dark Harvest raw adaptive
+  = 30 + 11 * souls + 0.10 * bonus AD + 0.05 * AP
+Dark Harvest threshold = below 50% target HP
+Dark Harvest cooldown = 35 s
+
+Relentless Hunter = 8 flat out-of-combat MS per stack
+maximum Relentless stacks = 5
+
+Hail of Blades AS = 120% melee / 60% ranged
+base empowered attacks = 2
+extra E-reset attacks = up to 2
+raw true per empowered attack = 4..20 + 0.08 * bonus AD + 0.06 * AP
+cooldown = 10 s
+
+Cheap Shot raw true = 10..45
+Cheap Shot cooldown = 4 s
+```
+
+Relentless movement speed ends on the first damage instance. Cheap Shot checks
+for existing impairment before the action applies its own slow.
 
 ### Sorcery
 
-- Summon Aery uses an approximately four-second effective travel cooldown.
-- Arcane Comet is assumed to hit at point-blank values.
-- Stormraider's Surge triggers after dealing 25% target maximum HP within three
-  seconds and grants 48% melee / 36% ranged movement speed for four seconds.
-- Deathfire Touch treats Q, R, and fire waves as area damage, burns for two
-  seconds, ticks every 0.5 seconds, and gains 75% damage after three seconds of
-  continuous burning.
-- Axiom Arcanist applies its 8% area-ultimate value to R.
-- Absolute Focus scales from 3–30 AP or 1.8–18 AD over levels 1–18, preserves
-  that slope at top-quest levels 19–20, and is active only while Kayle is
-  strictly above 70% HP.
-- Celerity, Waterwalking, Gathering Storm, Scorch, and Transcendence use their
-  configured level, time, location, and health inputs.
-- Nimbus Cloak remains inactive because Summoner Spells are not combo actions.
+```text
+Aery raw adaptive = 10..50 + 0.10 * bonus AD + 0.05 * AP
+Aery effective return cooldown = about 4 s
+
+Comet raw magic = 15..100 + 0.10 * bonus AD + 0.05 * AP
+Comet delay = 0.825 s
+Comet cooldown = 20..8 s
+
+Stormraider trigger = 25% target maximum HP within 3 s
+Stormraider MS = 48% melee / 36% ranged
+Stormraider duration = 4 s
+Stormraider cooldown = 20..10 s
+
+Deathfire tick raw magic
+  = 1.5..6 + 0.035 * bonus AD + 0.0125 * AP
+tick interval = 0.5 s
+area burn = 2 s
+single-target spell burn = 4 s
+continuous-burn bonus after 3 s = +75%
+
+Axiom Arcanist R amplifier = 8%
+
+Absolute Focus = 3..30 AP or 1.8..18 AD over levels 1..18
+active condition = current HP > 70%
+
+Celerity personal MS = +1%
+Celerity eligible-bonus multiplier = 1.07
+
+Waterwalking = +10 flat MS
+Waterwalking adaptive = 7.8..18 AD or 13..30 AP
+
+Scorch raw magic = 20..40
+Scorch delay = 1 s
+Scorch cooldown = 10 s
+
+Transcendence = +5 haste at level 5 and +5 at level 8
+
+Gathering Storm AD by interval
+  = [0, 4.8, 14.4, 28.8, 48, 72, 100.8, 134.4]
+Gathering Storm AP by interval
+  = [0, 8, 24, 48, 80, 120, 168, 224]
+```
+
+Comet assumes a point-blank hit. Nimbus Cloak is inactive because Summoner
+Spells are not combo actions.
 
 ### Resolve and Inspiration
 
-- Grasp gains one combat stack per second and procs on an attack at four
-  stacks.
-- First Strike opens a three-second window from the first hit and adds 7% of
-  post-mitigation damage as true damage.
-- Magical Footwear adds 10 flat movement speed to an equipped Boots upgrade.
-- Approach Velocity applies a 7.5% total-movement-speed multiplier toward an
-  impaired target, doubled to 15% when Kayle supplied the impairment. The
-  simulator assumes Kayle faces the combo target.
-- Jack of All Trades counts unique supported item-stat types and grants its
-  threshold stats.
-- Conditions Kayle cannot trigger, such as Aftershock and Sudden Impact, are
-  visual only.
+```text
+Grasp trigger = attack at 4 combat stacks
+Grasp stack rate = 1 per combat second
+Grasp raw magic = 3.5% melee / 1.4% ranged of Kayle maximum HP
+Grasp heal = 1.3% melee / 0.52% ranged of Kayle maximum HP
 
-### Stat shards and configuration
+First Strike window = 3 s from first hit
+First Strike bonus true = 7% of post-mitigation damage
 
-- Adaptive Force: 5.4 AD or 9 AP.
-- Attack Speed: 10% bonus attack speed.
-- Ability Haste: 8 haste.
-- Health: 65 bonus HP.
-- Scaling Health: 10–200 HP across levels 1–20.
-- Movement Speed: 2.5% movement speed.
-- Tenacity/slow resistance is visual only in this damage model.
+Magical Footwear = +10 flat MS to equipped Boots
 
-Scenario inputs include game time, Kayle HP percentage, Dark Harvest souls,
-Dark Seal stacks, Legend stacks, Relentless Hunter stacks, Energized readiness,
-and whether the fight occurs in the river.
+Approach Velocity total-MS multiplier = 7.5%
+own impairment multiplier = 15%
 
-Haste affects cooldown warnings, not the execution of the fixed combo. Legend:
-Haste supplies 1.5 basic-ability haste per configured stack. Transcendence
-grants 5 ability haste at levels 5 and 8; its level-11 takedown refund is not
-modeled.
+Jack of All Trades:
+  haste = 1 per unique supported stat type
+  at 5 stat types = 3.6 AD or 6 AP
+  at 10 stat types = 12 AD or 20 AP
+```
 
-## Explicit assumptions and exclusions
+Grasp gains combat stacks over time. Approach Velocity assumes Kayle moves
+toward the impaired target. Unreachable conditions such as Aftershock and
+Sudden Impact are visual only.
 
-### Deliberate normalizations
+### Stat shards
 
-- A Q placed before E is treated as having hit before E, independent of
-  projectile travel distance.
+```text
+Adaptive Force = 5.4 AD or 9 AP
+Attack Speed   = 10% bonus AS
+Ability Haste  = 8 haste
+Health         = 65 bonus HP
+Scaling Health = 10..200 HP over levels 1..20
+Movement Speed = 2.5%
+Tenacity       = visual only
+```
+
+Scenario inputs cover game time, Kayle HP, rune stacks, item stacks, Energized
+readiness, and river state. Haste changes cooldown warnings, not the fixed
+sequence execution.
+
+## Assumptions and exclusions
+
+Deliberate normalizations:
+
+- Q before E is treated as landed before E.
 - Comet uses point-blank damage and is assumed to hit.
-- Hexoptics uses Kayle's current maximum attack range instead of a distance
-  input.
-- Approach Velocity assumes Kayle is moving toward the impaired combo target.
-- Random critical strikes and expected-crit cooldown reduction use expected
-  values.
-- Fleet's measured delayed movement update is synchronized automatically before
-  the following action.
-- Cooldown-invalid actions remain in the simulation and generate warnings.
+- Hexoptics uses current maximum attack range instead of target distance.
+- Approach Velocity assumes movement toward the combo target.
+- Random crit and crit-based cooldown reduction use expected values.
+- Fleet's delayed movement update synchronizes before the next action.
+- Cooldown-invalid actions execute and produce warnings.
 
-### Not modeled
+Not modeled:
 
-- Mana costs, mana restoration, and mana-gated casts.
-- Shields and most non-damage defensive utility.
+- Mana gating and mana restoration.
+- Shields and most defensive utility.
 - Cryptbloom's takedown heal.
-- Takedown-only range/reset behavior from Hexoptics and Fiendhunter.
-- Statikk's secondary chain targets and Stormsurge's nearby-enemy death AoE.
-- Zhonya's invulnerability; stasis advances the timeline by 2.5 seconds only.
-- Rylai's slow magnitude; its impairment state is modeled where relevant.
-- Transcendence's level-11 takedown cooldown refund.
-- Summoner Spells and therefore Nimbus Cloak activation.
+- Takedown-only range and reset effects.
+- Statikk secondary targets and Stormsurge death-area damage.
+- Zhonya invulnerability; stasis only advances time.
+- Rylai slow magnitude; impairment state is retained.
+- Transcendence takedown refund.
+- Summoner Spells and Nimbus Cloak activation.
 
-## Where values come from
+Modeled utility duration:
 
-External formulas, item/rune pages, patch notes, and asset provenance are listed
-in [Data and icon sources](SOURCES.md). In-game measurements and exact simulator
-comparisons are in [Validation and backtesting](VALIDATION.md). When those
-sources disagree, the conflict and chosen behavior should be recorded in the
-validation document rather than silently resolved in code.
+```text
+Zhonya stasis timeline advance = 2.5 s
+```
+
+## Source and evidence links
+
+- [Validation and backtesting](VALIDATION.md)
+- [Data and icon sources](SOURCES.md)
+- [Maintaining items](ITEM_MAINTENANCE.md)

@@ -11,16 +11,14 @@ scope belong in the [simulation model](MODEL.md).
 
 ## Patch-update workflow
 
-1. Record the League patch and review date in `SOURCES.md`.
-2. Check Riot patch notes first, then the relevant current item page.
-3. Update the catalog entry without changing its stable internal key.
-4. If the change introduces new behavior, implement it at the appropriate
-   trigger point in `backend/engine.py`.
-5. Add or update a focused automated test.
-6. Run the complete suite and the baseline backtest.
-7. Repeat affected Practice Tool isolations when possible and record their
-   setup, components, exact comparison, and confidence in `VALIDATION.md`.
-8. Update `ICON_VERSION` only when the bytes of a local icon changed.
+- Record the League patch and review date in `SOURCES.md`.
+- Check Riot patch notes first, then the current item page.
+- Update the catalog entry without changing its stable internal key.
+- Implement new behavior at its real trigger point in `backend/engine.py`.
+- Add or update a focused automated test.
+- Run the complete suite and baseline backtest.
+- Repeat affected Practice Tool isolations and record the evidence.
+- Update `ICON_VERSION` only when local icon bytes changed.
 
 ## Do I need to edit `engine.py`?
 
@@ -81,14 +79,17 @@ stable even if Riot changes the displayed name.
 },
 ```
 
-Whole percentage points and fractional ratios are deliberately different:
+Percentage conventions:
 
-- `attack_speed: 25` means 25% attack speed.
-- `crit_chance: 25` means 25% critical strike chance.
-- `move_speed_pct: 4` means 4% movement speed.
-- `magic_pen_pct: 0.30` means 30% magic penetration.
-- `omnivamp: 0.10` means 10% omnivamp.
-- `ap_ratio: 0.15` means 15% AP scaling.
+```text
+attack_speed: 25    = 25% attack speed
+crit_chance: 25     = 25% critical strike chance
+move_speed_pct: 4   = 4% movement speed
+
+magic_pen_pct: 0.30 = 30% magic penetration
+omnivamp: 0.10      = 10% omnivamp
+ap_ratio: 0.15      = 15% AP scaling
+```
 
 The server validates these names at startup. A typo such as `attackspeed` now
 produces a readable error instead of silently contributing zero.
@@ -185,9 +186,14 @@ in a build.
 - `spellblade`: limited to one Spellblade item and enables the generic proc.
 - `blight`: limited to one Blight item.
 - `fatality`: limited to one Fatality item.
-- `mid_role_quest`: activates the 8% mid-role reward and is illegal at levels
-  19-20 because those levels require the top-role quest.
+- `mid_role_quest`: activates the mid-role reward and enforces the role-quest
+  level restriction.
 - `active`: descriptive; the `active` object makes the button appear.
+
+```text
+mid-role bonus AD/AP multiplier = 1.08
+evolved mid-role boots are illegal at levels 19..20
+```
 
 Other tags identify custom mechanics already implemented in `engine.py`.
 
@@ -196,15 +202,12 @@ Other tags identify custom mechanics already implemented in `engine.py`.
 Do not put formulas into `passive_text`; that text is display-only. For a new
 mechanic:
 
-1. Add a clearly named effect object to the item entry, such as
-   `"new_passive": {...}`.
-2. Register that name in `CUSTOM_EFFECT_FIELDS` so catalog validation accepts
-   it.
-3. In `engine.py`, initialize any stacks, cooldowns, durations, or ready state.
-4. Call the mechanic from its real trigger point: attack, on-hit, ability cast,
-   damage event, R cast, or timeline update.
-5. Send damage through `_deal(...)`; do not round inside the mechanic.
-6. Add a focused automated test and, when possible, a Practice Tool record.
+- Add a clearly named effect object, such as `"new_passive": {...}`.
+- Register it in `CUSTOM_EFFECT_FIELDS`.
+- Initialize stacks, cooldowns, durations, and ready state in `engine.py`.
+- Call it from its real attack, cast, damage, or timeline trigger.
+- Send damage through `_deal(...)`; do not round inside the mechanic.
+- Add a focused test and, when possible, a Practice Tool record.
 
 Searching `engine.py` for an existing effect field such as `bring_it_down`,
 `spelldance`, or `opening_barrage` shows complete examples.

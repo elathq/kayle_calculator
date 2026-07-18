@@ -1,62 +1,54 @@
 # Data and icon sources
 
-This file is the source ledger for the simulator. It records where champion,
-item, rune, combat-rule, and icon information came from and how conflicting
-evidence is handled.
+This is the external-source ledger. It records provenance and version pins; it
+does not duplicate the formulas in the [Simulation model](MODEL.md).
 
-Last reviewed: **2026-07-18**. The local Riot asset set is pinned to Data Dragon
-**16.14.1**. League Wiki pages are live pages and can change after this review.
+```text
+last review          = 2026-07-18
+local Riot asset set = Data Dragon 16.14.1
+League Wiki pages    = live and may change after review
+```
 
-Related project records:
+Related records:
 
-- [Simulation model](MODEL.md) — what the engine currently calculates.
-- [Validation and backtesting](VALIDATION.md) — controlled observations,
-  comparisons, confidence, and unresolved evidence.
-- [Maintaining items](ITEM_MAINTENANCE.md) — how to apply a patch update without
-  bypassing validation.
+- [Simulation model](MODEL.md)
+- [Validation and backtesting](VALIDATION.md)
+- [Maintaining items](ITEM_MAINTENANCE.md)
 
 ## Provenance policy
 
-Pinned numerical values live in the Python data files; this ledger identifies
-their external origin. A live link is not treated as an automatic update feed.
-When a source changes, the implementation, source review date, automated tests,
-and affected Practice Tool cases must be updated together.
+Pinned values live in the Python data files. A live link is a reference, not an
+automatic update feed. Source review, implementation, tests, and affected
+Practice Tool cases must change together.
 
-## Source priority
+Source priority:
 
-When sources disagree, use this order:
+- Repeatable Practice Tool observation from the target patch.
+- Current Riot patch notes or Riot-published data.
+- Current League Wiki page and patch history.
+- Explicit simulator assumption.
 
-1. A controlled, repeatable Practice Tool observation from the target patch.
-2. Current Riot patch notes or Riot-published game data.
-3. The current League of Legends Wiki page and its notes/patch history.
-4. An explicit simulator assumption, clearly documented in
-   [the simulation model](MODEL.md) and validation record.
+Timing-sensitive exceptions remain documented beside the source formula.
 
-The simulator keeps the wiki formula and the measured exception side by side
-when a Practice Tool interaction is timing-sensitive. Values should never be
-silently updated from a live page without rerunning the regression suite.
+## Champion and combat references
 
-## Champion and combat-system references
-
-| Data used | Source |
+| Data | Source |
 |---|---|
-| Kayle base stats, passive breakpoints, Q/W/E/R ranks, ratios, timings, range, and cooldowns | [Kayle — League Wiki](https://wiki.leagueoflegends.com/en-us/Kayle) |
-| Non-linear per-level stat growth | [Champion statistic](https://wiki.leagueoflegends.com/en-us/Champion_statistic) |
-| Attack-speed ratio, cap, windup, and attack timer | [Attack speed](https://wiki.leagueoflegends.com/en-us/Attack_speed) and [Attack timer](https://wiki.leagueoflegends.com/en-us/Attack_timer) |
-| Armor and physical mitigation | [Armor](https://wiki.leagueoflegends.com/en-us/Armor) |
-| Magic resistance and magic mitigation | [Magic resistance](https://wiki.leagueoflegends.com/en-us/Magic_resistance) |
-| Resistance reduction and penetration ordering | [Armor penetration](https://wiki.leagueoflegends.com/en-us/Armor_penetration) and [Magic penetration](https://wiki.leagueoflegends.com/en-us/Magic_penetration) |
-| Movement-speed stacking and soft caps | [Movement speed](https://wiki.leagueoflegends.com/en-us/Movement_speed) |
-| Adaptive force conversion | [Adaptive force](https://wiki.leagueoflegends.com/en-us/Adaptive_force) |
-| Ability haste and cooldown conversion | [Ability haste](https://wiki.leagueoflegends.com/en-us/Ability_haste) |
+| Kayle stats, passive, abilities, ranks, ratios, and timings | [Kayle — League Wiki](https://wiki.leagueoflegends.com/en-us/Kayle) |
+| Per-level growth | [Champion statistic](https://wiki.leagueoflegends.com/en-us/Champion_statistic) |
+| Attack-speed ratio, cap, windup, and timer | [Attack speed](https://wiki.leagueoflegends.com/en-us/Attack_speed), [Attack timer](https://wiki.leagueoflegends.com/en-us/Attack_timer) |
+| Physical mitigation | [Armor](https://wiki.leagueoflegends.com/en-us/Armor) |
+| Magic mitigation | [Magic resistance](https://wiki.leagueoflegends.com/en-us/Magic_resistance) |
+| Reduction and penetration order | [Armor penetration](https://wiki.leagueoflegends.com/en-us/Armor_penetration), [Magic penetration](https://wiki.leagueoflegends.com/en-us/Magic_penetration) |
+| Movement stacking and soft caps | [Movement speed](https://wiki.leagueoflegends.com/en-us/Movement_speed) |
+| Adaptive conversion | [Adaptive force](https://wiki.leagueoflegends.com/en-us/Adaptive_force) |
+| Haste conversion | [Ability haste](https://wiki.leagueoflegends.com/en-us/Ability_haste) |
 
-Practice Tool observations and their exact simulator comparisons are documented
-in [Validation and backtesting](VALIDATION.md). The machine-readable baseline is
+Practice Tool evidence is in [Validation and backtesting](VALIDATION.md). The
+baseline fixture is
 [`validation/practice_tool_cases.json`](../validation/practice_tool_cases.json).
 
 ## Item references
-
-The complete selectable item pool and its source pages are:
 
 | Simulator item | Wiki source |
 |---|---|
@@ -100,38 +92,57 @@ The complete selectable item pool and its source pages are:
 | Stormrazor | [Stormrazor](https://wiki.leagueoflegends.com/en-us/Stormrazor) |
 | Fiendhunter Bolts | [Fiendhunter Bolts](https://wiki.leagueoflegends.com/en-us/Fiendhunter_Bolts) |
 
-Useful Riot change records for recent or unusual items:
+Relevant Riot change records:
 
-- [League patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/) introduced Doran's Bow, documents the Dusk and Dawn healing addition, and records Statikk Shiv's rework to a single Energized trigger dealing 60 magic damage to champions.
-- [League patch 26.11 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-11-notes/) records the mid-role quest's 8% bonus AD/AP reward and Experimental Hexplate's ranged 35% AS / 14% movement-speed Overdrive values. Practice Tool measurements are the regression authority for their combined Swiftmarch interaction.
-- [League patch 25.21 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-21-notes/) records Doran's Blade's return to omnivamp-style healing and the Doran's Ring sustain change.
-- The live wiki page remains the source for the current post-release value when
-  a later patch changed an item after its introduction.
+- [Patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/)
+- [Patch 26.11 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-11-notes/)
+- [Patch 25.21 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-21-notes/)
 
-Not every passive changes damage. Sustain, stasis, shields, slows, and takedown
-effects can be shown in the UI while remaining outside the damage calculation;
-the [model exclusions](MODEL.md#explicit-assumptions-and-exclusions) list every
-deliberately unsupported or normalized effect.
+The linked notes support these unusual changes:
 
-For the July 17, 2026 item expansion, Riot Data Dragon 16.14.1 was used to
-cross-check standard Summoner's Rift item IDs, costs, base stats, names, and
-icons. The linked live wiki pages supplied the detailed formulas and cast/on-hit
-classification. This prevents similarly named legacy or alternate-mode entries
-from being mixed in: Bloodletter's Curse uses SR ID 8010, the current
-Stormrazor uses ID 3097, Rapid Firecannon uses ID 3094, Experimental Hexplate
-uses ID 3073, Essence Reaver uses ID 3508, Yun Tal uses ID 3032, and Navori
-Flickerblade uses ID 6675.
+```text
+patch 26.9:
+  - Doran's Bow introduction
+  - Dusk and Dawn healing addition
+  - Statikk single Energized champion proc = 60 raw magic
+
+patch 26.11:
+  - mid-role bonus AD/AP = 8%
+  - ranged Hexplate Overdrive = 35% AS / 14% MS
+
+patch 25.21:
+  - Doran's Blade omnivamp-style healing return
+  - Doran's Ring sustain change
+```
+
+The live item page is authoritative when a later patch changed the release
+value. Non-damage passives may appear in the UI while remaining outside the
+[model scope](MODEL.md#assumptions-and-exclusions).
+
+Catalog cross-check snapshot:
+
+```text
+review date        = 2026-07-17
+Riot catalog       = Data Dragon 16.14.1
+Bloodletter's Curse ID = 8010
+Stormrazor ID          = 3097
+Rapid Firecannon ID    = 3094
+Experimental Hexplate ID = 3073
+Essence Reaver ID      = 3508
+Yun Tal Wildarrows ID  = 3032
+Navori Flickerblade ID = 6675
+```
+
+Data Dragon supplied standard names, IDs, prices, stats, and icons. Wiki pages
+supplied detailed formulas and trigger classification.
 
 ## Rune references
 
-Rune tree names, IDs, slots, and icon paths are matched against Riot's
+Rune names, slots, IDs, and icon paths are matched against Riot's
 [`runesReforged.json`](https://ddragon.leagueoflegends.com/cdn/16.14.1/data/en_US/runesReforged.json).
 The general reference is the [Rune page](https://wiki.leagueoflegends.com/en-us/Rune).
 
-The following wiki pages are the formula sources for runes that can affect this
-simulator's damage, stats, timing, or Swiftmarch adaptive force:
-
-| Path | Rune sources |
+| Path | Formula sources |
 |---|---|
 | Precision | [Press the Attack](https://wiki.leagueoflegends.com/en-us/Press_the_Attack), [Lethal Tempo](https://wiki.leagueoflegends.com/en-us/Lethal_Tempo), [Fleet Footwork](https://wiki.leagueoflegends.com/en-us/Fleet_Footwork), [Conqueror](https://wiki.leagueoflegends.com/en-us/Conqueror), [Legend: Alacrity](https://wiki.leagueoflegends.com/en-us/Legend:_Alacrity), [Legend: Haste](https://wiki.leagueoflegends.com/en-us/Legend:_Haste), [Coup de Grace](https://wiki.leagueoflegends.com/en-us/Coup_de_Grace), [Cut Down](https://wiki.leagueoflegends.com/en-us/Cut_Down), [Last Stand](https://wiki.leagueoflegends.com/en-us/Last_Stand) |
 | Domination | [Electrocute](https://wiki.leagueoflegends.com/en-us/Electrocute), [Dark Harvest](https://wiki.leagueoflegends.com/en-us/Dark_Harvest), [Hail of Blades](https://wiki.leagueoflegends.com/en-us/Hail_of_Blades), [Cheap Shot](https://wiki.leagueoflegends.com/en-us/Cheap_Shot), [Relentless Hunter](https://wiki.leagueoflegends.com/en-us/Relentless_Hunter) |
@@ -139,77 +150,66 @@ simulator's damage, stats, timing, or Swiftmarch adaptive force:
 | Resolve | [Grasp of the Undying](https://wiki.leagueoflegends.com/en-us/Grasp_of_the_Undying) |
 | Inspiration | [First Strike](https://wiki.leagueoflegends.com/en-us/First_Strike), [Magical Footwear](https://wiki.leagueoflegends.com/en-us/Magical_Footwear), [Approach Velocity](https://wiki.leagueoflegends.com/en-us/Approach_Velocity), [Jack of All Trades](https://wiki.leagueoflegends.com/en-us/Jack_of_All_Trades) |
 
-Two important implementation notes:
+Important source interpretations:
 
-- Last Stand's four verified reference points are 5% at 40% missing HP, 7% at
-  50%, 9% at 60%, and 11% at 70% or more. This was wiki-confirmed because own
-  HP could not be controlled cleanly in Practice Tool.
-- Absolute Focus uses the wiki's linear 3–30 AP or 1.8–18 AD scaling over
-  levels 1–18 and the strict **above 70% current HP** condition. Top-quest
-  levels 19–20 preserve the same slope, matching the project's general rule for
-  level-scaled runes.
+```text
+Last Stand reference points:
+  40% missing HP -> 5%
+  50% missing HP -> 7%
+  60% missing HP -> 9%
+  >= 70% missing HP -> 11%
 
-Runes shown as greyed/unselected in the interface still use Riot's names and
-icons, but visual-only runes do not contribute hidden combat math.
+Absolute Focus:
+  scaling = 3..30 AP or 1.8..18 AD over levels 1..18
+  active condition = current HP > 70%
+  slope continues through levels 19..20
+```
+
+Visual-only runes use Riot names and icons but add no hidden combat math.
 
 ## Icon sources
 
 ### Item icons
 
-Local item PNG files in `frontend/icons/` are Riot client assets downloaded from
-Data Dragon 16.14.1 with the item ID as the filename:
+Local files use Riot item IDs:
 
 ```text
+frontend/icons/{item-id}.png
 https://ddragon.leagueoflegends.com/cdn/16.14.1/img/item/{item-id}.png
-```
-
-The supporting item catalog is:
-
-```text
 https://ddragon.leagueoflegends.com/cdn/16.14.1/data/en_US/item.json
 ```
 
-If an icon is not present in the local folder, the frontend falls back to
-CommunityDragon:
+Missing local icons use this display-only fallback:
 
 ```text
 https://cdn.communitydragon.org/latest/item/{item-id}
 ```
 
-CommunityDragon's `latest` path is intentionally a display fallback, not a
-numerical data source. Item stats and formulas remain pinned in the Python data
-file and the wiki ledger above.
+CommunityDragon's live path is not a numerical-data source.
 
 ### Rune and shard icons
 
-Rune icons in `frontend/icons/runes/` use the Riot perk ID as the local filename.
-Their original paths come from Data Dragon 16.14.1's `runesReforged.json` and
-are served by Riot with this pattern:
+Rune files use the Riot perk ID. Their paths come from the pinned rune catalog.
 
 ```text
-https://ddragon.leagueoflegends.com/cdn/img/{icon-path-from-runesReforged.json}
+frontend/icons/runes/{perk-id}.png
+https://ddragon.leagueoflegends.com/cdn/img/{icon-path}
 ```
 
-The five `path_*.png` files are the Precision, Domination, Sorcery, Resolve, and
-Inspiration path emblems. `StatMods*.png` files are Riot client stat-shard
-assets. Local copies avoid UI breakage if a CDN or a live version changes.
+Path emblems and stat-shard assets are also stored locally. Riot documents the
+format in the [Data Dragon guide](https://developer.riotgames.com/docs/lol#data-dragon).
 
-Riot's official overview of Data Dragon and its asset conventions is the
-[Riot Developer Portal Data Dragon documentation](https://developer.riotgames.com/docs/lol#data-dragon).
-
-## Attribution and maintenance
+## Attribution and update checklist
 
 League of Legends and Riot Games are trademarks or registered trademarks of
-Riot Games, Inc. This is an independent fan-made calculation tool and is not
-endorsed by Riot Games. Data Dragon and CommunityDragon images are used only to
-identify in-game items and runes.
+Riot Games, Inc. This independent tool is not endorsed by Riot Games. Riot and
+CommunityDragon images identify in-game items and runes.
 
-When updating to a new patch:
+For each patch:
 
-1. Record the new patch and review date here.
-2. Review every linked champion, item, and damage-relevant rune page that
-   changed in the patch notes.
-3. Update pinned numerical data separately from display icons.
-4. Rerun all automated tests and the baseline backtest.
-5. Repeat affected Practice Tool isolation cases and update
-   [Validation and backtesting](VALIDATION.md) with the new evidence.
+- Record the patch and review date.
+- Review changed champion, item, rune, and combat pages.
+- Update pinned data separately from display assets.
+- Run the complete test suite and baseline backtest.
+- Repeat affected Practice Tool isolations.
+- Update the validation record and confidence label.
