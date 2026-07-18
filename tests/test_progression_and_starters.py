@@ -1,5 +1,6 @@
 import unittest
 
+from backend.data.enemy_data import ENEMY_PRESETS, enemy_stats
 from backend.data.items_data import item_list_for_api
 from backend.data.kayle_data import default_ability_ranks
 from backend.engine import Simulation
@@ -9,6 +10,39 @@ ENEMY = {"hp": 3500, "armor": 100, "mr": 100}
 
 
 class ProgressionAndStarterItemTests(unittest.TestCase):
+    def test_enemy_presets_use_pinned_data_dragon_class_averages(self):
+        source_values = {
+            "squishy": {
+                "hp": (604.11, 102.62),
+                "armor": (25.97, 4.51),
+                "mr": (30.06, 1.41),
+            },
+            "average": {
+                "hp": (617.08, 103.93),
+                "armor": (29.57, 4.54),
+                "mr": (30.73, 1.68),
+            },
+            "tank": {
+                "hp": (632.42, 105.46),
+                "armor": (34.02, 4.57),
+                "mr": (31.36, 1.99),
+            },
+        }
+        level_eighteen = {
+            "squishy": {"hp": 2348.7, "armor": 102.6, "mr": 54.0},
+            "average": {"hp": 2383.9, "armor": 106.8, "mr": 59.3},
+            "tank": {"hp": 2425.2, "armor": 111.7, "mr": 65.2},
+        }
+
+        for key, stats in source_values.items():
+            for stat, (base, growth) in stats.items():
+                self.assertEqual(ENEMY_PRESETS[key][stat]["base"], base)
+                self.assertEqual(ENEMY_PRESETS[key][stat]["growth"], growth)
+            scaled = enemy_stats(key, 18)
+            for stat, expected in level_eighteen[key].items():
+                self.assertEqual(scaled[stat], expected)
+            self.assertEqual(scaled["bonus_hp"], 0.0)
+
     def test_default_skill_order_starts_e_q_w_then_maxes_q_e_w(self):
         expected = {
             1: {"Q": 0, "W": 0, "E": 1, "R": 0},

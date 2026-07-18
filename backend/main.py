@@ -36,6 +36,17 @@ DEPLOY_VERSION = (
 )[:12]
 IS_RENDER = os.environ.get("RENDER", "").lower() == "true"
 
+
+def frontend_asset_version():
+    """Keep production assets commit-pinned and local edits cache-safe."""
+    if IS_RENDER:
+        return DEPLOY_VERSION
+    latest_asset_mtime = max(
+        (FRONTEND / filename).stat().st_mtime_ns
+        for filename in ("style.css", "app.js")
+    )
+    return f"dev-{latest_asset_mtime:x}"
+
 MAX_BODY_BYTES = 256 * 1024
 MAX_BUILDS = 8
 MAX_ITEMS_PER_BUILD = 6
@@ -411,8 +422,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
         body = path.read_bytes()
+        asset_version = frontend_asset_version() if path.name == "index.html" else ""
         if path.name == "index.html":
-            body = body.replace(b"__DEPLOY_VERSION__", DEPLOY_VERSION.encode("ascii"))
+            body = body.replace(
+                b"__DEPLOY_VERSION__", asset_version.encode("ascii"))
         is_text = ctype.startswith("text/") or ctype in {
             "application/javascript", "application/xml", "image/svg+xml",
         }
@@ -425,7 +438,7 @@ class Handler(BaseHTTPRequestHandler):
 
         stat = path.stat()
         encoding_tag = "-gz" if use_gzip else ""
-        deploy_tag = f"-{DEPLOY_VERSION}" if path.name == "index.html" else ""
+        deploy_tag = f"-{asset_version}" if path.name == "index.html" else ""
         etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}{deploy_tag}{encoding_tag}"'
         if path.name == "index.html":
             cache_control = "no-cache"

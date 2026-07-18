@@ -1,9 +1,9 @@
 """Enemy simulation presets.
 
-Presets are archetype base stats scaled with Riot's growth formula so the
-"average enemy at level X" tracks a real game state. Values are league-wide
-approximations of champion base stats per class; all fields stay editable
-in the UI after a preset is applied.
+The scalable presets are unweighted averages from Riot Data Dragon 16.14.1.
+"Squishy" includes champions tagged Marksman or Mage, "tank" includes Tank or
+Fighter, and "average" includes the complete champion catalog. They model base
+stats only; items and bonus health remain explicit UI inputs.
 """
 
 from .kayle_data import growth_factor
@@ -15,25 +15,25 @@ ENEMY_PRESETS = {
         "hp": 3500.0, "armor": 100.0, "mr": 100.0,
     },
     "squishy": {
-        "name": "Squishy (ADC / Mage)",
+        "name": "Squishy average (Marksman / Mage)",
         "scaling": True,
-        "hp":    {"base": 630.0, "growth": 104.0},
-        "armor": {"base": 26.0,  "growth": 4.2},
-        "mr":    {"base": 30.0,  "growth": 1.3},
+        "hp":    {"base": 604.11, "growth": 102.62},
+        "armor": {"base": 25.97,  "growth": 4.51},
+        "mr":    {"base": 30.06,  "growth": 1.41},
     },
     "average": {
-        "name": "Average Champion",
+        "name": "All-champion average",
         "scaling": True,
-        "hp":    {"base": 655.0, "growth": 106.0},
-        "armor": {"base": 33.0,  "growth": 4.7},
-        "mr":    {"base": 32.0,  "growth": 1.55},
+        "hp":    {"base": 617.08, "growth": 103.93},
+        "armor": {"base": 29.57,  "growth": 4.54},
+        "mr":    {"base": 30.73,  "growth": 1.68},
     },
     "tank": {
-        "name": "Tank / Bruiser",
+        "name": "Tank / Fighter average",
         "scaling": True,
-        "hp":    {"base": 665.0, "growth": 115.0},
-        "armor": {"base": 40.0,  "growth": 5.5},
-        "mr":    {"base": 32.0,  "growth": 2.05},
+        "hp":    {"base": 632.42, "growth": 105.46},
+        "armor": {"base": 34.02,  "growth": 4.57},
+        "mr":    {"base": 31.36,  "growth": 1.99},
     },
 }
 

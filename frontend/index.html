@@ -10,18 +10,10 @@
 
 <header class="app-header">
   <div class="brand">
-    <div class="brand-mark" aria-hidden="true">✦</div>
-    <div>
-      <div class="brand-kicker">League of Legends Combat Lab</div>
-      <h1>Kayle Damage Simulator</h1>
-    </div>
+    <h1>Kayle Damage Simulator</h1>
   </div>
   <div class="header-actions">
-    <div class="accuracy-status">
-      <span class="status-dot" aria-hidden="true"></span>
-      Full-precision model
-    </div>
-    <button id="simulateBtn" class="simulate-btn">Calculate damage</button>
+    <button id="simulateBtn" class="simulate-btn">Calculate</button>
   </div>
 </header>
 
@@ -30,10 +22,7 @@
     <section class="panel config-panel">
       <div class="section-heading">
         <span class="step-number">01</span>
-        <div>
-          <span class="eyebrow">Champion</span>
-          <h2>Kayle setup</h2>
-        </div>
+        <h2>Kayle setup</h2>
       </div>
 
       <div class="cfg-block level-control">
@@ -63,20 +52,18 @@
     <section class="panel config-panel">
       <div class="section-heading">
         <span class="step-number">02</span>
-        <div>
-          <span class="eyebrow">Opponent</span>
-          <h2>Target profile</h2>
-        </div>
+        <h2>Target</h2>
       </div>
 
       <div class="cfg-block">
         <label class="field-label" for="enemyPreset">Preset</label>
         <select id="enemyPreset" class="wide"></select>
+        <p class="field-note">Base-stat averages. Items are not included.</p>
       </div>
-      <div class="enemy-grid">
+      <div class="enemy-grid target-grid">
         <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1" max="10000000"></label>
         <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0" max="10000000"></label>
-        <label><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0" max="10000000"></label>
+        <label class="wide-field"><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0" max="10000000"></label>
         <label><span>Armor</span><input type="number" id="enemyArmor" value="100" min="-10000" max="100000"></label>
         <label><span>Magic resist</span><input type="number" id="enemyMr" value="100" min="-10000" max="100000"></label>
       </div>
@@ -85,7 +72,6 @@
     <details class="panel config-panel cfg-collapse">
       <summary>
         <span class="summary-copy">
-          <span class="eyebrow">Scenario</span>
           <strong>Advanced conditions</strong>
         </span>
         <span class="summary-chevron" aria-hidden="true">⌄</span>
@@ -106,7 +92,6 @@
           <label class="check"><input type="checkbox" id="optRageblade"><span>Start with full Rageblade stacks</span></label>
           <label class="check"><input type="checkbox" id="optYunTal" checked><span>Yun Tal starts fully trained</span></label>
         </div>
-        <p class="precision-note">Display rounding never changes internal health, proc, or damage calculations.</p>
       </div>
     </details>
   </aside>
@@ -116,15 +101,12 @@
       <div class="panel-head">
         <div class="section-heading compact">
           <span class="step-number">03</span>
-          <div>
-            <span class="eyebrow">Loadouts</span>
-            <h2>Build comparison</h2>
-          </div>
+          <h2>Builds</h2>
         </div>
-        <button id="addBuildBtn" class="secondary-btn">＋ Add build</button>
+        <button id="addBuildBtn" class="secondary-btn">Add build</button>
       </div>
       <div class="section-description-row">
-        <p class="section-description">Configure items and runes for each build you want to compare.</p>
+        <p class="section-description">Compare item and rune setups.</p>
         <span class="limit-status" id="buildLimitStatus" aria-live="polite">0 / 8 builds</span>
       </div>
       <div id="buildsContainer" class="builds-container"></div>
@@ -134,15 +116,12 @@
       <div class="panel-head">
         <div class="section-heading compact">
           <span class="step-number">04</span>
-          <div>
-            <span class="eyebrow">Execution</span>
-            <h2>Combo sequence</h2>
-          </div>
+          <h2>Combo</h2>
         </div>
-        <button class="text-btn danger-text" id="clearComboBtn">Clear sequence</button>
+        <button class="secondary-btn clear-btn" id="clearComboBtn">Clear sequence</button>
       </div>
       <div class="section-description-row">
-        <p class="section-description">Click an action to append it. Drag actions to reproduce the exact order used in Practice Tool.</p>
+        <p class="section-description">Add actions in the order they happen.</p>
         <span class="limit-status" id="comboLimitStatus" aria-live="polite">0 / 100 actions</span>
       </div>
       <div class="combo-palette" id="comboPalette"></div>
@@ -153,17 +132,13 @@
 
     <section class="results-section">
       <div class="results-heading">
-        <div>
-          <span class="eyebrow">Analysis</span>
-          <h2>Simulation results</h2>
-        </div>
-        <span class="results-caption">Each build uses the same target and action timeline</span>
+        <h2>Results</h2>
       </div>
       <div id="resultsContainer" class="results-grid">
         <div class="empty-state">
           <span class="empty-icon" aria-hidden="true">◇</span>
-          <strong>Ready to calculate</strong>
-          <span>Configure a build and combo, then calculate damage.</span>
+          <strong>No results yet</strong>
+          <span>Choose a build and combo, then calculate.</span>
         </div>
       </div>
     </section>
@@ -173,10 +148,7 @@
 <div class="overlay hidden" id="runeOverlay">
   <div class="overlay-box rune-box" role="dialog" aria-modal="true" aria-labelledby="runeOverlayTitle">
     <div class="overlay-head">
-      <div>
-        <span class="eyebrow">Loadout editor</span>
-        <h3 id="runeOverlayTitle">Runes</h3>
-      </div>
+      <h3 id="runeOverlayTitle">Runes</h3>
       <div class="overlay-actions">
         <button class="text-btn" id="clearRunesBtn">Reset runes</button>
         <button class="close-btn" id="closeRunesBtn" aria-label="Close rune editor">×</button>
@@ -194,10 +166,7 @@
 <div class="overlay hidden" id="itemOverlay">
   <div class="overlay-box item-box" role="dialog" aria-modal="true" aria-labelledby="itemOverlayTitle">
     <div class="overlay-head">
-      <div>
-        <span class="eyebrow">Item slot</span>
-        <h3 id="itemOverlayTitle">Select an item</h3>
-      </div>
+      <h3 id="itemOverlayTitle">Select an item</h3>
       <div class="overlay-actions">
         <button class="text-btn danger-text" id="clearSlotBtn">Empty slot</button>
         <button class="close-btn" id="closeOverlayBtn" aria-label="Close item picker">×</button>

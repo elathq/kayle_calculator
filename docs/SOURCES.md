@@ -43,6 +43,34 @@ Timing-sensitive exceptions remain documented beside the source formula.
 | Movement stacking and soft caps | [Movement speed](https://wiki.leagueoflegends.com/en-us/Movement_speed) |
 | Adaptive conversion | [Adaptive force](https://wiki.leagueoflegends.com/en-us/Adaptive_force) |
 | Haste conversion | [Ability haste](https://wiki.leagueoflegends.com/en-us/Ability_haste) |
+| Enemy-preset base stats and class tags | [Riot Data Dragon champion catalog](https://ddragon.leagueoflegends.com/cdn/16.14.1/data/en_US/champion.json) |
+
+Enemy presets use unweighted catalog averages and Riot's normal growth formula.
+They contain no item stats.
+
+```text
+catalog champions = 173
+
+Squishy average:
+  filter = Marksman OR Mage
+  champions = 96
+  HP = 604.11 + 102.62 growth
+  armor = 25.97 + 4.51 growth
+  MR = 30.06 + 1.41 growth
+
+All-champion average:
+  champions = 173
+  HP = 617.08 + 103.93 growth
+  armor = 29.57 + 4.54 growth
+  MR = 30.73 + 1.68 growth
+
+Tank / Fighter average:
+  filter = Tank OR Fighter
+  champions = 80
+  HP = 632.42 + 105.46 growth
+  armor = 34.02 + 4.57 growth
+  MR = 31.36 + 1.99 growth
+```
 
 Practice Tool evidence is in [Validation and backtesting](VALIDATION.md). The
 baseline fixture is

@@ -426,15 +426,30 @@ function clearRunes() {
   renderRuneEditor();
 }
 
+function runeTooltipHtml(name, detail, status, statusClass) {
+  return `<span class="rune-tooltip" role="tooltip">
+    <strong>${escapeHtml(name)}</strong>
+    <span>${escapeHtml(detail)}</span>
+    <span class="rune-tooltip-status ${statusClass}">${escapeHtml(status)}</span>
+  </span>`;
+}
+
 function runeOptEl(r, selected, onClick) {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "rune-opt" + (selected ? " selected" : "") + (r.dmg ? "" : " visual-only");
-  el.title = r.note + (r.dmg && !r.has_math ? " — math pending" : "");
+  const status = r.dmg
+    ? (r.has_math ? "Included in the simulation" : "Calculation support pending")
+    : "Visual selection only";
+  const statusClass = r.dmg ? (r.has_math ? "included" : "pending") : "visual";
   el.setAttribute("aria-pressed", selected ? "true" : "false");
-  el.setAttribute("aria-label", `${r.name}${selected ? ", selected" : ", not selected"}`);
+  el.setAttribute(
+    "aria-label",
+    `${r.name}${selected ? ", selected" : ", not selected"}. ${r.note}. ${status}`,
+  );
   el.innerHTML = `<img src="${r.icon}" alt="${r.name}" loading="lazy" decoding="async">
-    ${r.dmg ? '<span class="dmg-dot"></span>' : ""}<span>${r.name}</span>`;
+    ${r.dmg ? '<span class="dmg-dot"></span>' : ""}
+    ${runeTooltipHtml(r.name, r.note, status, statusClass)}`;
   el.addEventListener("click", onClick);
   return el;
 }
@@ -479,6 +494,7 @@ function renderRuneEditor() {
   primPath.slots.forEach((slot, row) => {
     const rowEl = document.createElement("div");
     rowEl.className = "rune-row" + (row === 0 ? " keystone-row" : "");
+    if (row === 0) rowEl.dataset.label = "Keystones";
     for (const r of slot) {
       const selected = row === 0 ? R.keystone === r.id : R.primarySlots[row - 1] === r.id;
       rowEl.appendChild(runeOptEl(r, selected, () => {
@@ -551,11 +567,16 @@ function renderRuneEditor() {
       el.className = "rune-opt shard-opt"
         + (R.shards[row] === opt.key ? " selected" : "")
         + (opt.combat ? "" : " visual-only");
-      el.title = opt.text;
+      const status = opt.combat ? "Included in the simulation" : "Visual selection only";
+      const statusClass = opt.combat ? "included" : "visual";
       el.setAttribute("aria-pressed", R.shards[row] === opt.key ? "true" : "false");
-      el.setAttribute("aria-label", `${opt.name}${R.shards[row] === opt.key ? ", selected" : ", not selected"}`);
+      el.setAttribute(
+        "aria-label",
+        `${opt.name}${R.shards[row] === opt.key ? ", selected" : ", not selected"}. ${opt.text}. ${status}`,
+      );
       el.innerHTML = `<img src="${opt.icon}" alt="${opt.name}" loading="lazy" decoding="async">
-        ${opt.combat ? '<span class="dmg-dot"></span>' : ""}<span>${opt.name}</span>`;
+        ${opt.combat ? '<span class="dmg-dot"></span>' : ""}
+        ${runeTooltipHtml(opt.name, opt.text, status, statusClass)}`;
       el.addEventListener("click", () => { R.shards[row] = opt.key; renderRuneEditor(); });
       rowEl.appendChild(el);
     }
@@ -796,7 +817,7 @@ async function simulate() {
     results.appendChild(warning);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Calculate damage";
+    btn.textContent = "Calculate";
   }
 }
 
@@ -883,7 +904,6 @@ function renderResults(results) {
       </div>
       <div class="stat-rows">
         <span class="k">Pre-mitigation</span><span class="v">${fmtDamage(r.pre_mitigation_total)} (−${r.mitigated_pct}%)</span>
-        <span class="k">Damage model</span><span class="v">Full precision</span>
         <span class="k">Attacks / duration</span><span class="v">${r.attack_count} in ${r.duration.toFixed(2)}s</span>
         <span class="k">Peak 1s window</span>
         <span class="v">${r.burst_window_1s.start !== null
@@ -901,7 +921,7 @@ function renderResults(results) {
           : ""}
         <span class="k">Magic pen</span><span class="v">${r.stats.magic_pen_pct}% + ${r.stats.magic_pen_flat}</span>
         <span class="k">Armor pen</span><span class="v">${r.stats.armor_pen_pct}%</span>
-        <span class="k">Crit model</span><span class="v">${r.stats.crit_chance}% at ${r.stats.crit_damage}% damage (expected)</span>
+        <span class="k">Critical strikes</span><span class="v">${r.stats.crit_chance}% at ${r.stats.crit_damage}% damage (expected)</span>
         <span class="k">Enemy HP left</span>
         <span class="v">${r.enemy.killed ? "DEAD" : fmtDamage(r.enemy.remaining_hp) + ` (${hpPct}%)`}</span>
       </div>
