@@ -1,4 +1,4 @@
-"""Item data — transcribed from the League Wiki pages in SOURCES_README.md.
+"""Item data — transcribed from the sources in docs/SOURCES.md.
 
 Icons are served locally from frontend/icons/<id>.png (downloaded from Data
 Dragon 16.14.1 using the item IDs); the frontend falls back to the
@@ -31,7 +31,7 @@ ICON_CDN = "https://cdn.communitydragon.org/latest/item/{id}"
 #   spellblade: {...}
 #   active: {...}
 #
-# See ITEM_EDITING_GUIDE.md for copy/paste item templates and the exact rule
+# See docs/ITEM_MAINTENANCE.md for templates and the exact rule
 # for when a genuinely new mechanic needs an engine hook.
 
 SUPPORTED_STAT_KEYS = {

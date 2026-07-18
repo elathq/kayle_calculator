@@ -7,6 +7,21 @@ evidence is handled.
 Last reviewed: **2026-07-18**. The local Riot asset set is pinned to Data Dragon
 **16.14.1**. League Wiki pages are live pages and can change after this review.
 
+Related project records:
+
+- [Simulation model](MODEL.md) — what the engine currently calculates.
+- [Validation and backtesting](VALIDATION.md) — controlled observations,
+  comparisons, confidence, and unresolved evidence.
+- [Maintaining items](ITEM_MAINTENANCE.md) — how to apply a patch update without
+  bypassing validation.
+
+## Provenance policy
+
+Pinned numerical values live in the Python data files; this ledger identifies
+their external origin. A live link is not treated as an automatic update feed.
+When a source changes, the implementation, source review date, automated tests,
+and affected Practice Tool cases must be updated together.
+
 ## Source priority
 
 When sources disagree, use this order:
@@ -15,7 +30,7 @@ When sources disagree, use this order:
 2. Current Riot patch notes or Riot-published game data.
 3. The current League of Legends Wiki page and its notes/patch history.
 4. An explicit simulator assumption, clearly documented in
-   `BACKTESTING_AND_FINDINGS.md`.
+   [the simulation model](MODEL.md) and validation record.
 
 The simulator keeps the wiki formula and the measured exception side by side
 when a Practice Tool interaction is timing-sensitive. Values should never be
@@ -36,8 +51,8 @@ silently updated from a live page without rerunning the regression suite.
 | Ability haste and cooldown conversion | [Ability haste](https://wiki.leagueoflegends.com/en-us/Ability_haste) |
 
 Practice Tool observations and their exact simulator comparisons are documented
-in `BACKTESTING_AND_FINDINGS.md`. The machine-readable baseline is
-`validation/practice_tool_cases.json`.
+in [Validation and backtesting](VALIDATION.md). The machine-readable baseline is
+[`validation/practice_tool_cases.json`](../validation/practice_tool_cases.json).
 
 ## Item references
 
@@ -95,7 +110,8 @@ Useful Riot change records for recent or unusual items:
 
 Not every passive changes damage. Sustain, stasis, shields, slows, and takedown
 effects can be shown in the UI while remaining outside the damage calculation;
-`README.md` lists the deliberately unsupported effects.
+the [model exclusions](MODEL.md#explicit-assumptions-and-exclusions) list every
+deliberately unsupported or normalized effect.
 
 For the July 17, 2026 item expansion, Riot Data Dragon 16.14.1 was used to
 cross-check standard Summoner's Rift item IDs, costs, base stats, names, and
@@ -196,4 +212,4 @@ When updating to a new patch:
 3. Update pinned numerical data separately from display icons.
 4. Rerun all automated tests and the baseline backtest.
 5. Repeat affected Practice Tool isolation cases and update
-   `BACKTESTING_AND_FINDINGS.md` with the new evidence.
+   [Validation and backtesting](VALIDATION.md) with the new evidence.

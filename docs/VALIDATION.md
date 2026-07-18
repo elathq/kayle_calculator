@@ -1,46 +1,120 @@
-# Backtesting and findings
+# Validation and backtesting
 
-This is the canonical validation record for the Kayle damage simulator. It
-separates values observed in League's Practice Tool from wiki-derived rules and
-automated regression coverage.
+This is the single canonical validation document for the Kayle damage
+simulator. It combines the repeatable Practice Tool protocol, recorded in-game
+measurements, exact simulator comparisons, automated regression coverage, and
+known evidence gaps.
+
+It deliberately separates what was observed in League from what came from a
+published source or simulator assumption. The implemented behavior itself is
+documented in the [simulation model](MODEL.md), and external references are
+listed in [data and icon sources](SOURCES.md).
+
+## Evidence labels
+
+| Label | Standard used in this document |
+|---|---|
+| Practice Tool-confirmed | A controlled in-game isolation reproduced the relevant components or aggregate result. |
+| Source-confirmed | Riot data, Riot patch notes, or the League Wiki provides the rule; automated coverage exists, but a controlled in-game capture is still missing. |
+| Simulator assumption | The game permits ambiguous timing or spatial outcomes, so the calculator uses one explicitly documented normalization. |
+| Inconsistent capture | Recorded fields conflict or did not reproduce; the observation is retained for transparency but is not a regression target. |
+| Not modeled | The behavior is intentionally outside the current single-target damage scope. |
 
 ## Validation status
 
 | Area | Status | Evidence |
 |---|---|---|
-| Full-precision damage pipeline | Confirmed | Practice Tool totals, displayed HP changes, and 61 automated tests |
-| Basic attacks, E, PTA, fire waves | Confirmed | Direct Practice Tool isolation |
-| Q damage, shred, penetration, Shadowflame crit | Confirmed | Direct Practice Tool isolation across several resistance and HP setups |
-| Rageblade stacks, Phantom Hit, fast E reset | Confirmed | Direct Practice Tool isolation through attacks 4–10 and a two-dummy test |
-| R, Gunblade, Lich Bane, Dusk and Dawn | Confirmed | Direct Practice Tool isolation |
+| Full-precision damage pipeline | Practice Tool-confirmed | Practice Tool totals, displayed HP changes, and 74 automated tests |
+| Basic attacks, E, PTA, fire waves | Practice Tool-confirmed | Direct Practice Tool isolation |
+| Q damage, shred, penetration, Shadowflame crit | Practice Tool-confirmed | Direct Practice Tool isolation across several resistance and HP setups |
+| Rageblade stacks, Phantom Hit, fast E reset | Practice Tool-confirmed | Direct Practice Tool isolation through attacks 4–10 and a two-dummy test |
+| R, Gunblade, Lich Bane, Dusk and Dawn | Practice Tool-confirmed | Direct Practice Tool isolation |
 | Last Stand curve | Source-confirmed | League Wiki screenshot and automated boundary tests; own-health Practice Tool test was not possible |
 | W, movement-speed stacking, Swiftmarch adaptive force | Source-confirmed and regression-tested | Wiki values plus automated timing/layer tests |
 | Boots, starter items, default skill order, Absolute Focus | Source-confirmed and regression-tested | Wiki/Riot references plus automated tests |
-| Essence Reaver, Experimental Hexplate, Kraken Slayer, Terminus, Bloodletter's Curse, Riftmaker, Rapid Firecannon, Statikk Shiv, and Stormrazor | Confirmed | Direct Practice Tool isolation plus fixed automated regression targets |
+| Essence Reaver, Experimental Hexplate, Kraken Slayer, Terminus, Bloodletter's Curse, Riftmaker, Rapid Firecannon, Statikk Shiv, and Stormrazor | Practice Tool-confirmed | Direct Practice Tool isolation plus fixed automated regression targets |
 
 The fixture is labelled Data Dragon `16.14.1`. The exact live Practice Tool
 patch was not written down during the first capture, so the fixture deliberately
 retains the status `patch confirmation pending` instead of overstating certainty.
 
-## Rules used while testing
+## Practice Tool validation protocol
 
-Each isolation test records:
+Use this protocol for every fresh patch pass and every new mechanic. Do not
+merge timing-dependent outcomes into an average; preserve them as separate
+observations.
 
-- Kayle's level, ability ranks, items, runes, shards, displayed AD, AP, attack
-  speed, maximum HP, and current HP percentage.
-- Dummy maximum HP, starting HP, armor, and magic resistance.
-- Exact action order, waits, range observations, and whether Zeal, PTA, or
-  Rageblade were pre-stacked.
-- Dummy HP before and after the sequence, the dummy total, and every floating
-  physical, magic, or true-damage number.
-- A fresh reset between cases so stacks and cooldowns cannot leak into the next
-  measurement.
+### Before each pass
 
-Floating combat text is presentation data, not the simulation's arithmetic.
-League can show a dummy total and displayed HP delta that differ by one because
-both are rounded for display. The simulator therefore has one full-precision
-path from raw damage through modifiers and resistance to exact applied damage.
-There is no separate "integer damage per instance" calculation.
+- Record the exact League patch, map, and date.
+- Record Kayle's level, Q/W/E/R ranks, items, runes, shards, displayed AD, AP,
+  attack speed, movement speed when relevant, maximum HP, and current HP
+  percentage.
+- Record the dummy's maximum HP, starting HP, bonus HP if relevant, armor, and
+  magic resistance.
+- State whether Zeal, PTA, Rageblade, Fleet, Energized, or another effect starts
+  stacked or ready.
+- Reset the dummy, cooldowns, and stacks between cases.
+
+### For every sequence
+
+1. Write the exact action order and every deliberate wait.
+2. Record target HP immediately before and after the sequence.
+3. Record the Practice Tool dummy total.
+4. Record every floating damage number and its physical, magic, or true-damage
+   color.
+5. Record transient Kayle stats when the test concerns a timed buff.
+6. Repeat at least three times and flag timing-dependent branches separately.
+7. Compare the first differing event in the simulator timeline: raw damage,
+   modifier, effective resistance, then applied damage. Aggregate totals can
+   otherwise hide the cause.
+
+Displayed values are rounded. Exact simulations should normally be compared
+with roughly one point of presentation tolerance, while still requiring the
+individual damage sources and ordering to make sense.
+
+The simulator therefore keeps one full-precision path from raw damage through
+modifiers and resistance to exact applied damage. There is no separate
+integer-per-instance combat model.
+
+### Baseline regression pass
+
+Use the setup in `validation/practice_tool_cases.json` and record these four
+sequences on a fresh target:
+
+1. AA.
+2. E.
+3. AA → E.
+4. AA → E → AA.
+
+Enter newly confirmed observations in the JSON fixture, then run:
+
+```text
+python -B validation/backtest.py
+python -B -m unittest discover -s tests -v
+```
+
+### Isolation order for changed mechanics
+
+1. Basic attack and Q against 0, 50, 100, and 200 resistance.
+2. Q followed by the same hit to verify that Q damages before applying shred.
+3. Percentage penetration alone, flat penetration alone, then both together.
+4. Shadowflame crit with an action beginning above and below 40% target HP.
+5. E against full and reduced target HP.
+6. PTA, Spellblade, and Rageblade independently before combining them.
+7. W followed by actions around the two-second expiry when testing Swiftmarch
+   or movement-speed effects.
+8. On-hit items one at a time: Wit's End; Statikk attacks 1–4; Stormrazor and
+   Rapid Firecannon with one preloaded Energized attack; Kraken attacks 1–3;
+   Terminus attacks 1–7; and Bloodletter eligible hits 1–4.
+9. R-triggered and cooldown items independently: Experimental Hexplate inside
+   and outside eight seconds; Fiendhunter R followed by four attacks; Essence
+   Reaver ability → attack; Yun Tal from zero crit stacks; Navori Q → attacks →
+   Q.
+10. Extended timing: Riftmaker at 0/1/2/3/4 seconds and Cosmic Drive,
+    Stormrazor, Fleet, or Stormsurge immediately before and after expiry.
+11. Crit items with natural crit and non-crit samples recorded separately. The
+    simulator reports the weighted expected value, not one random outcome.
 
 ## Baseline four-case fixture
 
@@ -283,7 +357,7 @@ action; the public combo builder needs no Wait utility and keeps one E formula.
   boots, Swiftmarch and Spellslinger's Shoes, are rejected at levels 19-20
   because those levels require the mutually exclusive top-lane role quest.
 
-### July 17 item expansion (source-confirmed, isolation in progress)
+### Current item expansion (source-confirmed, isolation in progress)
 
 The calculator now includes Cosmic Drive, Riftmaker, Kraken Slayer, Terminus,
 Infinity Edge, Bloodletter's Curse, Hexoptics C44, Phantom Dancer, Lord
@@ -469,7 +543,8 @@ the visible jump; waiting for 570 MS before issuing a normal attack produced
 
 ## Regression suite
 
-The maintained automated suite currently contains 61 passing tests. It covers:
+At this documentation revision, the maintained automated suite contains 74
+passing tests. It covers:
 
 - Full-precision damage and resistance formulas, including negative resistance.
 - Q shred and penetration ordering.
@@ -480,7 +555,7 @@ The maintained automated suite currently contains 61 passing tests. It covers:
 - W/Swiftmarch timing and movement-speed rune layers.
 - Boots/starter restrictions, Dark Seal stacks, Absolute Focus, and default
   ability progression.
-- All 18 newly added item IDs and their stat, stacking, penetration, movement,
+- All 19 newly added item IDs and their stat, stacking, penetration, movement,
   expected-crit, target-bonus-HP, and post-R timeline behavior.
 
 Run it without creating cache files:

@@ -1,8 +1,26 @@
-# Item editing guide
+# Maintaining items
 
 This guide is for manually updating the calculator after a League patch. The
 editable catalog is `backend/data/items_data.py`; every selectable item is one
 entry in the `ITEMS` dictionary.
+
+Before changing a value, record its source in [Data and icon sources](SOURCES.md).
+After changing behavior, document the evidence and result in
+[Validation and backtesting](VALIDATION.md). The supported ordering and explicit
+scope belong in the [simulation model](MODEL.md).
+
+## Patch-update workflow
+
+1. Record the League patch and review date in `SOURCES.md`.
+2. Check Riot patch notes first, then the relevant current item page.
+3. Update the catalog entry without changing its stable internal key.
+4. If the change introduces new behavior, implement it at the appropriate
+   trigger point in `backend/engine.py`.
+5. Add or update a focused automated test.
+6. Run the complete suite and the baseline backtest.
+7. Repeat affected Practice Tool isolations when possible and record their
+   setup, components, exact comparison, and confidence in `VALIDATION.md`.
+8. Update `ICON_VERSION` only when the bytes of a local icon changed.
 
 ## Do I need to edit `engine.py`?
 
@@ -212,3 +230,7 @@ python -B -m unittest discover -s tests -v
 ```
 
 Then restart the calculator server and confirm the item appears in the picker.
+
+If the mechanic is source-confirmed but not yet Practice Tool-confirmed, label
+it that way in `VALIDATION.md`; do not imply that automated agreement with the
+implementation is independent gameplay evidence.
