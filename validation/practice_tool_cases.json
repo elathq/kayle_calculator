@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "patch": "16.14.1",
+    "status": "observed in Practice Tool - patch confirmation pending",
+    "recorded_on": "2026-07-17",
+    "notes": "Dummy totals, displayed HP, and floating damage were supplied from a fresh four-case isolation pass.",
+    "kayle_displayed_stats": {"ad": 75, "ap": 363, "attack_speed": 1.277, "max_hp": 1996}
+  },
+  "setup": {
+    "level": 12,
+    "ability_ranks": {"Q": 5, "W": 0, "E": 5, "R": 2},
+    "items": ["nashors_tooth", "dusk_and_dawn", "rabadons_deathcap"],
+    "runes": [8005, 8009, 9104, 8299, 8226, 8234],
+    "shards": ["attack_speed", "adaptive", "health_scaling"],
+    "enemy": {"hp": 3500, "armor": 100, "mr": 100},
+    "options": {
+      "pre_stacked_zeal": false,
+      "pre_stacked_rageblade": false,
+      "legend_stacks": 0,
+      "kayle_hp_pct": 100
+    }
+  },
+  "cases": [
+    {
+      "id": "A_auto",
+      "label": "Auto alone",
+      "combo": [{"type": "AA"}],
+      "observed_total": 126,
+      "hp_before": 3500,
+      "hp_after": 3375,
+      "floating": {"physical": [37], "magic": [88]}
+    },
+    {
+      "id": "B_clean_e",
+      "label": "Clean E alone",
+      "combo": [{"type": "E"}],
+      "observed_total": 260,
+      "hp_before": 3500,
+      "hp_after": 3240,
+      "floating": {"physical": [37], "magic": [134, 88]}
+    },
+    {
+      "id": "C_auto_e",
+      "label": "Auto, then E",
+      "combo": [{"type": "AA"}, {"type": "E"}],
+      "observed_total": 455,
+      "hp_before": 3500,
+      "hp_after": 3046,
+      "floating": {"physical": [37, 37], "magic": [88, 144, 147]}
+    },
+    {
+      "id": "D_auto_e_auto",
+      "label": "Auto, E, auto",
+      "combo": [{"type": "AA"}, {"type": "E"}, {"type": "AA"}],
+      "observed_total": 591,
+      "hp_before": 3500,
+      "hp_after": 2910,
+      "floating": {"physical": [37, 37, 40], "magic": [88, 144, 147, 95]}
+    }
+  ]
+}

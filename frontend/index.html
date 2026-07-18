@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kayle Damage Simulator</title>
+<link rel="stylesheet" href="style.css?v=20260718-fleet-auto">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">✦</div>
+    <div>
+      <div class="brand-kicker">League of Legends Combat Lab</div>
+      <h1>Kayle Damage Simulator</h1>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="accuracy-status">
+      <span class="status-dot" aria-hidden="true"></span>
+      Full-precision model
+    </div>
+    <button id="simulateBtn" class="simulate-btn">Calculate damage</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="config-column" aria-label="Simulation setup">
+    <section class="panel config-panel">
+      <div class="section-heading">
+        <span class="step-number">01</span>
+        <div>
+          <span class="eyebrow">Champion</span>
+          <h2>Kayle setup</h2>
+        </div>
+      </div>
+
+      <div class="cfg-block level-control">
+        <div class="field-heading">
+          <label for="levelSlider">Champion level</label>
+          <output id="levelValue" class="level-value">18</output>
+        </div>
+        <input type="range" id="levelSlider" min="1" max="20" value="18">
+        <div class="range-scale"><span>1</span><span>20</span></div>
+        <div class="passive-badge" id="passiveBadge"></div>
+      </div>
+
+      <div class="cfg-block">
+        <div class="field-heading">
+          <span>Ability ranks</span>
+          <button class="text-btn" id="autoRanksBtn">Auto assign</button>
+        </div>
+        <div class="ranks-row" id="ranksRow">
+          <label class="rank-cell"><span>Q</span><select id="rankQ" aria-label="Q rank"></select></label>
+          <label class="rank-cell"><span>W</span><select id="rankW" aria-label="W rank"></select></label>
+          <label class="rank-cell"><span>E</span><select id="rankE" aria-label="E rank"></select></label>
+          <label class="rank-cell"><span>R</span><select id="rankR" aria-label="R rank"></select></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel config-panel">
+      <div class="section-heading">
+        <span class="step-number">02</span>
+        <div>
+          <span class="eyebrow">Opponent</span>
+          <h2>Target profile</h2>
+        </div>
+      </div>
+
+      <div class="cfg-block">
+        <label class="field-label" for="enemyPreset">Preset</label>
+        <select id="enemyPreset" class="wide"></select>
+      </div>
+      <div class="enemy-grid">
+        <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1"></label>
+        <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0"></label>
+        <label><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0"></label>
+        <label><span>Armor</span><input type="number" id="enemyArmor" value="100"></label>
+        <label><span>Magic resist</span><input type="number" id="enemyMr" value="100"></label>
+      </div>
+    </section>
+
+    <details class="panel config-panel cfg-collapse">
+      <summary>
+        <span class="summary-copy">
+          <span class="eyebrow">Scenario</span>
+          <strong>Advanced conditions</strong>
+        </span>
+        <span class="summary-chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="advanced-body">
+        <div class="enemy-grid">
+          <label><span>Game time (min)</span><input type="number" id="gameTime" value="25" min="0" max="90"></label>
+          <label><span>Kayle HP %</span><input type="number" id="kayleHp" value="100" min="1" max="100"></label>
+          <label><span>Dark Harvest souls</span><input type="number" id="dhSouls" value="0" min="0"></label>
+          <label id="darkSealStacksField" class="hidden"><span>Dark Seal Glory</span><input type="number" id="darkSealStacks" value="0" min="0" max="10"></label>
+          <label><span>Legend stacks</span><input type="number" id="legendStacks" value="10" min="0" max="10"></label>
+          <label><span>Relentless stacks</span><input type="number" id="relentlessStacks" value="0" min="0" max="5"></label>
+        </div>
+        <div class="toggle-list">
+          <label class="check"><input type="checkbox" id="fleetEnergized" checked><span>Energized effects start ready</span></label>
+          <label class="check"><input type="checkbox" id="assumeRiver"><span>Fight takes place in river</span></label>
+          <label class="check"><input type="checkbox" id="optZeal" checked><span>Start with full Zeal stacks</span></label>
+          <label class="check"><input type="checkbox" id="optRageblade"><span>Start with full Rageblade stacks</span></label>
+          <label class="check"><input type="checkbox" id="optYunTal" checked><span>Yun Tal starts fully trained</span></label>
+        </div>
+        <p class="precision-note">Display rounding never changes internal health, proc, or damage calculations.</p>
+      </div>
+    </details>
+  </aside>
+
+  <div class="content-col">
+    <section class="panel workspace-panel">
+      <div class="panel-head">
+        <div class="section-heading compact">
+          <span class="step-number">03</span>
+          <div>
+            <span class="eyebrow">Loadouts</span>
+            <h2>Build comparison</h2>
+          </div>
+        </div>
+        <button id="addBuildBtn" class="secondary-btn">＋ Add build</button>
+      </div>
+      <p class="section-description">Configure items and runes for each build you want to compare.</p>
+      <div id="buildsContainer" class="builds-container"></div>
+    </section>
+
+    <section class="panel workspace-panel combo-panel">
+      <div class="panel-head">
+        <div class="section-heading compact">
+          <span class="step-number">04</span>
+          <div>
+            <span class="eyebrow">Execution</span>
+            <h2>Combo sequence</h2>
+          </div>
+        </div>
+        <button class="text-btn danger-text" id="clearComboBtn">Clear sequence</button>
+      </div>
+      <p class="section-description">Click an action to append it. Drag actions to reproduce the exact order used in Practice Tool.</p>
+      <div class="combo-palette" id="comboPalette"></div>
+      <div class="combo-track" id="comboTrack" aria-label="Selected combo sequence">
+        <span class="combo-empty">Add an action to begin the combo.</span>
+      </div>
+    </section>
+
+    <section class="results-section">
+      <div class="results-heading">
+        <div>
+          <span class="eyebrow">Analysis</span>
+          <h2>Simulation results</h2>
+        </div>
+        <span class="results-caption">Each build uses the same target and action timeline</span>
+      </div>
+      <div id="resultsContainer" class="results-grid">
+        <div class="empty-state">
+          <span class="empty-icon" aria-hidden="true">◇</span>
+          <strong>Ready to calculate</strong>
+          <span>Configure a build and combo, then calculate damage.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="overlay hidden" id="runeOverlay">
+  <div class="overlay-box rune-box" role="dialog" aria-modal="true" aria-labelledby="runeOverlayTitle">
+    <div class="overlay-head">
+      <div>
+        <span class="eyebrow">Loadout editor</span>
+        <h3 id="runeOverlayTitle">Runes</h3>
+      </div>
+      <div class="overlay-actions">
+        <button class="text-btn" id="clearRunesBtn">Reset runes</button>
+        <button class="close-btn" id="closeRunesBtn" aria-label="Close rune editor">×</button>
+      </div>
+    </div>
+    <div class="rune-editor" id="runeEditor"></div>
+    <div class="rune-legend" aria-label="Rune state legend">
+      <span><i class="legend-rune selected-legend"></i>Selected</span>
+      <span><i class="legend-rune"></i>Not selected</span>
+      <span><i class="dmg-dot"></i>Affects calculation</span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="itemOverlay">
+  <div class="overlay-box item-box" role="dialog" aria-modal="true" aria-labelledby="itemOverlayTitle">
+    <div class="overlay-head">
+      <div>
+        <span class="eyebrow">Item slot</span>
+        <h3 id="itemOverlayTitle">Select an item</h3>
+      </div>
+      <div class="overlay-actions">
+        <button class="text-btn danger-text" id="clearSlotBtn">Empty slot</button>
+        <button class="close-btn" id="closeOverlayBtn" aria-label="Close item picker">×</button>
+      </div>
+    </div>
+    <div class="item-grid" id="itemGrid"></div>
+  </div>
+</div>
+
+<script src="app.js?v=20260718-burst-1s"></script>
+</body>
+</html>
