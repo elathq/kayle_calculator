@@ -381,7 +381,7 @@ class EnginePrecisionTests(unittest.TestCase):
             [], options)
         self.assertEqual(clamped["enemy"]["remaining_hp"], 3500.0)
 
-    def test_shadowflame_crit_snapshots_hp_for_the_whole_damage_frame(self):
+    def test_shadowflame_crit_reads_live_hp_between_attack_components(self):
         options = {
             "rune_ids": [8021, 8009, 9104, 8299, 8226, 8234],
             "shards": ["attack_speed", "adaptive", "health_scaling"],
@@ -400,14 +400,23 @@ class EnginePrecisionTests(unittest.TestCase):
         crossing = simulate_build(
             LEVEL, default_ability_ranks(LEVEL), items, enemy,
             [{"type": "AA"}] * 5 + [{"type": "Q"}], options)
-        self.assertEqual(crossing["total_damage"], 1051.95)
+        self.assertEqual(crossing["total_damage"], 1064.98)
         wave = next(event for event in crossing["events"]
                     if event["source"].startswith("Passive fire wave"))
+        nashor = next(event for event in crossing["events"]
+                      if event["source"] == "Nashor's Tooth on-hit"
+                      and event["t"] == wave["t"])
+        e_passive = next(event for event in crossing["events"]
+                         if event["source"].startswith("E passive on-hit")
+                         and event["t"] == wave["t"])
         q_event = next(event for event in crossing["events"]
                        if event["source"].startswith("Q"))
         self.assertEqual(wave["multiplier"], 1.0)
         self.assertNotIn("Shadowflame crit", wave["source"])
-        self.assertEqual(q_event["hp_before"], 403.5228)
+        self.assertEqual(nashor["multiplier"], 1.0)
+        self.assertEqual(e_passive["multiplier"], 1.2)
+        self.assertIn("Shadowflame crit", e_passive["source"])
+        self.assertEqual(q_event["hp_before"], 390.4915)
         self.assertEqual(q_event["multiplier"], 1.2)
         self.assertIn("Shadowflame crit", q_event["source"])
 
@@ -671,24 +680,226 @@ class EnginePrecisionTests(unittest.TestCase):
         idle = simulate_build(LEVEL, ranks, items, ENEMY, [], options)
         self.assertEqual(idle["stats"]["movement_speed"], 410.0)
         self.assertEqual(idle["stats"]["swiftmarch_adaptive_force"], 20.5)
-        self.assertEqual(idle["stats"]["ap"], 336.3)
+        self.assertEqual(idle["stats"]["ap"], 330.5)
 
         result = simulate_build(
             LEVEL, ranks, items, ENEMY,
             [{"type": "W"}] + [{"type": "AA"}] * 4, options)
         w_note = next(event for event in result["events"]
                       if event["source"].startswith("W movement speed"))
-        self.assertIn("538.24 total", w_note["source"])
-        self.assertIn("+26.91 adaptive force", w_note["source"])
+        self.assertIn("537.29 total", w_note["source"])
+        self.assertIn("+26.86 adaptive force", w_note["source"])
 
         nashor_hits = [event for event in result["events"]
                        if event["source"] == "Nashor's Tooth on-hit"]
         self.assertEqual(len(nashor_hits), 4)
         self.assertTrue(all(hit["t"] < 2.0 for hit in nashor_hits[:3]))
         self.assertGreater(nashor_hits[3]["t"], 2.0)
-        self.assertAlmostEqual(nashor_hits[0]["raw"], 66.7891, places=4)
-        self.assertAlmostEqual(nashor_hits[2]["raw"], 66.7891, places=4)
-        self.assertAlmostEqual(nashor_hits[3]["raw"], 65.4387, places=4)
+        self.assertAlmostEqual(nashor_hits[0]["raw"], 65.8939, places=4)
+        self.assertAlmostEqual(nashor_hits[2]["raw"], 65.8939, places=4)
+        self.assertAlmostEqual(nashor_hits[3]["raw"], 64.5765, places=4)
+
+    def test_rabadon_and_mid_role_ap_percentages_stack_additively(self):
+        result = simulate_build(
+            18, default_ability_ranks(18),
+            ["dusk_and_dawn", "nashors_tooth", "rabadons_deathcap",
+             "void_staff", "shadowflame", "swiftmarch"],
+            {"hp": 3500, "current_hp": 3500, "armor": 60, "mr": 60},
+            [], {
+                "rune_ids": [8005, 9104, 8299, 8234, 8236],
+                "shards": ["attack_speed", "adaptive", "health_scaling"],
+                "game_time_min": 25,
+                "kayle_hp_pct": 100,
+                "legend_stacks": 10,
+            })
+
+        self.assertEqual(result["stats"]["movement_speed"], 444.51)
+        self.assertEqual(result["stats"]["swiftmarch_adaptive_force"], 22.23)
+        self.assertEqual(result["stats"]["ap"], 731.7)
+
+    def test_level_18_dusk_combo_uses_live_shadowflame_and_fast_e_reset(self):
+        items = [
+            "dusk_and_dawn", "nashors_tooth", "rabadons_deathcap",
+            "void_staff", "shadowflame", "swiftmarch",
+        ]
+        enemy = {
+            "hp": 3500, "current_hp": 3500, "armor": 60, "mr": 60,
+        }
+        options = {
+            "rune_ids": [8005, 9104, 8299, 8234, 8236],
+            "shards": ["attack_speed", "adaptive", "health_scaling"],
+            "game_time_min": 20,
+            "kayle_hp_pct": 100,
+            "legend_stacks": 10,
+            "use_e_for_aa_cancel": True,
+        }
+        short = simulate_build(
+            18, live_default_ability_ranks(18), items, enemy,
+            [{"type": action} for action in ["Q", "AA", "AA", "AA"]],
+            options,
+        )
+        self.assertEqual(short["total_damage"], 2635.68)
+
+        third_time = max(
+            event["t"] for event in short["events"]
+            if event["source"] == "Basic attack")
+        third = [
+            event for event in short["events"] if event["t"] == third_time
+            and event["type"] in ("physical", "magic", "true")
+        ]
+        third_magic = sum(
+            event["dealt"] for event in third if event["type"] == "magic")
+        self.assertAlmostEqual(third_magic, 552.3754, places=4)
+        self.assertEqual(
+            ["Shadowflame crit" in event["source"] for event in third],
+            [False, False, True, True],
+        )
+
+        full = simulate_build(
+            18, live_default_ability_ranks(18), items, enemy,
+            [{"type": action}
+             for action in ["Q", "AA", "AA", "AA", "E"]],
+            options,
+        )
+        spellblades = [
+            event for event in full["events"]
+            if event["source"] == "Dusk and Dawn Spellblade"
+        ]
+        self.assertEqual(len(spellblades), 1)
+        third_attack = [
+            event for event in full["events"]
+            if event["source"] == "Basic attack"
+        ][-1]
+        e_attack = next(
+            event for event in full["events"]
+            if event["source"] == "Basic attack (E)")
+        self.assertAlmostEqual(
+            e_attack["t"] - third_attack["t"],
+            5.0 / 30.0,
+            places=3,
+        )
+
+        waited = simulate_build(
+            18, live_default_ability_ranks(18), items, enemy,
+            [{"type": action}
+             for action in ["Q", "AA", "AA", "AA", "E"]],
+            {**options, "use_e_for_aa_cancel": False},
+        )
+        waited_spellblades = [
+            event for event in waited["events"]
+            if event["source"].startswith("Dusk and Dawn Spellblade")
+            and event["type"] == "magic"
+        ]
+        waited_third_attack = [
+            event for event in waited["events"]
+            if event["source"] == "Basic attack"
+        ][-1]
+        waited_e = next(
+            event for event in waited["events"]
+            if event["source"] == "Basic attack (E)")
+        self.assertEqual(len(waited_spellblades), 2)
+        self.assertAlmostEqual(
+            waited_e["t"] - waited_third_attack["t"],
+            0.607,
+            places=3,
+        )
+
+    def test_level_6_aa_e_uses_attack_speed_windup_and_game_ticks(self):
+        options = {
+            "rune_ids": [8021, 9104],
+            "shards": ["attack_speed", "adaptive", "health_scaling"],
+            "legend_stacks": 0,
+            "pre_stacked_zeal": False,
+        }
+        items = ["nashors_tooth", "berserkers_greaves"]
+        enemy = {"hp": 1000, "armor": 30, "mr": 30}
+        combo = [{"type": "AA"}, {"type": "E"}]
+
+        fast = simulate_build(
+            6, live_default_ability_ranks(6), items, enemy, combo,
+            {**options, "use_e_for_aa_cancel": True},
+        )
+        waited = simulate_build(
+            6, live_default_ability_ranks(6), items, enemy, combo,
+            {**options, "use_e_for_aa_cancel": False},
+        )
+
+        def aa_e_gap(result):
+            aa = next(
+                event for event in result["events"]
+                if event["source"] == "Basic attack")
+            e = next(
+                event for event in result["events"]
+                if event["source"] == "Basic attack (E)")
+            return e["t"] - aa["t"]
+
+        # 1.251 starting AS: the reset reaches E after a 5-tick windup plus
+        # one projectile tick. Without the reset, live post-hit AS controls
+        # the continuous attack timer rather than rounding the whole timer.
+        self.assertAlmostEqual(aa_e_gap(fast), 6.0 / 30.0, places=3)
+        self.assertAlmostEqual(aa_e_gap(waited), 0.774, places=3)
+        self.assertEqual(fast["total_damage"], waited["total_damage"])
+
+    def test_level_6_lich_bane_e_reset_keeps_followup_aa_cadence(self):
+        result = simulate_build(
+            6,
+            live_default_ability_ranks(6),
+            ["lich_bane", "berserkers_greaves"],
+            {"hp": 1000, "armor": 30, "mr": 30},
+            [{"type": action} for action in ["AA", "E", "AA", "AA"]],
+            {
+                "rune_ids": [8021, 9104],
+                "shards": ["attack_speed", "adaptive", "health_scaling"],
+                "legend_stacks": 0,
+                "pre_stacked_zeal": False,
+                "use_e_for_aa_cancel": True,
+            },
+        )
+        attacks = [
+            event for event in result["events"]
+            if event["source"] in ("Basic attack", "Basic attack (E)")
+        ]
+
+        self.assertEqual(result["total_damage"], 375.25)
+        self.assertEqual(result["dps"], 173.3)
+        # Lich Bane is primed before E's windup, producing the theoretical
+        # six-tick AA-reset hit. The next AA then waits a normal interval.
+        self.assertAlmostEqual(attacks[1]["t"] - attacks[0]["t"], 0.2, places=3)
+        self.assertGreater(attacks[2]["t"] - attacks[1]["t"], 0.99)
+
+    def test_level_18_lich_combo_uses_post_proc_as_and_point_blank_q(self):
+        items = [
+            "lich_bane", "rabadons_deathcap", "shadowflame",
+            "nashors_tooth", "void_staff", "swiftmarch",
+        ]
+        options = {
+            "rune_ids": [8005, 9104, 8299, 8234, 8236],
+            "shards": ["attack_speed", "adaptive", "health_scaling"],
+            "legend_stacks": 0,
+            "game_time_min": 1,
+            "kayle_hp_pct": 100,
+            "pre_stacked_zeal": False,
+        }
+        combo = [
+            {"type": action} for action in ["Q", "AA", "AA", "AA", "E"]
+        ]
+        enemy = {"hp": 3500, "armor": 30, "mr": 30}
+
+        fast = simulate_build(
+            18, live_default_ability_ranks(18), items, enemy, combo,
+            {**options, "use_e_for_aa_cancel": True},
+        )
+        waited = simulate_build(
+            18, live_default_ability_ranks(18), items, enemy, combo,
+            {**options, "use_e_for_aa_cancel": False},
+        )
+
+        self.assertEqual(fast["total_damage"], 4734.39)
+        self.assertEqual(fast["duration"], 1.78)
+        self.assertEqual(fast["dps"], 2660.2)
+        self.assertEqual(waited["total_damage"], 5263.16)
+        self.assertEqual(waited["duration"], 2.253)
+        self.assertEqual(waited["dps"], 2336.2)
 
     def test_swiftmarch_static_movement_runes_stack_in_correct_layers(self):
         ranks = default_ability_ranks(18)
@@ -731,9 +942,9 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertIn("480.00 total", note["source"])
         nashor_hits = [event for event in result["events"]
                        if event["source"] == "Nashor's Tooth on-hit"]
-        self.assertAlmostEqual(nashor_hits[0]["raw"], 65.7019, places=4)
-        self.assertAlmostEqual(nashor_hits[1]["raw"], 66.1758, places=4)
-        self.assertAlmostEqual(nashor_hits[2]["raw"], 65.7019, places=4)
+        self.assertAlmostEqual(nashor_hits[0]["raw"], 64.8353, places=4)
+        self.assertAlmostEqual(nashor_hits[1]["raw"], 65.3010, places=4)
+        self.assertAlmostEqual(nashor_hits[2]["raw"], 64.8353, places=4)
         self.assertLess(nashor_hits[1]["t"], 1.0)
         self.assertGreater(nashor_hits[2]["t"], 1.0)
 
@@ -766,7 +977,7 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertIn("522.00 total MS", storm_note["source"])
         storm_nashor = next(event for event in storm["events"]
                             if event["source"] == "Nashor's Tooth on-hit")
-        self.assertAlmostEqual(storm_nashor["raw"], 66.6181, places=4)
+        self.assertAlmostEqual(storm_nashor["raw"], 65.7357, places=4)
 
     def test_w_and_celerity_recalculate_each_action_in_their_windows(self):
         result = simulate_build(
@@ -781,12 +992,12 @@ class EnginePrecisionTests(unittest.TestCase):
             })
         w_note = next(event for event in result["events"]
                       if event["source"].startswith("W movement speed"))
-        self.assertIn("551.60 total", w_note["source"])
-        self.assertIn("+27.58 adaptive force", w_note["source"])
+        self.assertIn("550.56 total", w_note["source"])
+        self.assertIn("+27.53 adaptive force", w_note["source"])
         hits = [event for event in result["events"]
                 if event["source"] == "Nashor's Tooth on-hit"]
         self.assertEqual([hit["raw"] for hit in hits],
-                         [66.9297, 66.9297, 66.9297, 65.5286])
+                         [66.0313, 66.0313, 66.0313, 64.6648])
         self.assertTrue(all(hit["t"] < 2.0 for hit in hits[:3]))
         self.assertGreater(hits[3]["t"], 2.0)
 

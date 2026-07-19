@@ -188,6 +188,7 @@ def validate_simulation_payload(payload):
     for boolean_key in (
         "pre_stacked_zeal", "pre_stacked_rageblade",
         "pre_stacked_yun_tal", "fleet_starts_energized", "assume_river",
+        "use_e_for_aa_cancel",
     ):
         _optional_bool(raw_options, boolean_key, options)
     numeric_options = {
@@ -638,7 +639,11 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        server.shutdown()
+        # ``shutdown()`` must be called from a different thread than
+        # ``serve_forever()``. Calling it here deadlocks a local Ctrl+C exit.
+        pass
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":

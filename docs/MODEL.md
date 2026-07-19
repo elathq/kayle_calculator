@@ -177,6 +177,33 @@ E is one empowered basic attack and attack reset. It includes the physical hit,
 one normal on-hit package, and the active missing-health damage. It primes and
 may consume Spellblade.
 
+The shared **Use E for AA cancel** condition controls the timing only when an E
+directly follows an AA:
+
+```text
+game tick          = 1 / 30 s
+attack timer       = 1 / live post-hit attack speed
+AA or E windup     = 0.193555 / current attack speed
+E hit time         = windup rounded up to a game tick + one projectile tick
+
+enabled  = skip the preceding AA's remaining cooldown, then resolve E hit time
+disabled = finish that cooldown, then resolve E hit time
+```
+
+This affects combo duration and can change whether a Spellblade cooldown is
+ready. It does not create a second E damage formula.
+
+E is still an empowered basic attack after it lands. If an ordinary AA follows
+E, that AA waits for the full post-E attack interval. Lich Bane's attack-speed
+bonus while Spellblade is primed is included in E's windup, then disappears
+from the following interval when the proc is consumed. Spellblade readiness is
+checked when E is pressed, not when its projectile lands.
+
+Q is always modeled at point-blank range. It adds no projectile travel time;
+only its attack-speed-scaled cast/windup remains, rounded up to a game tick.
+Ordinary `1 / attack speed` timers remain continuous and are not independently
+rounded upward, avoiding cumulative timing drift across long attack sequences.
+
 ```text
 without Rageblade:
   missing-HP snapshot = before empowered attack
@@ -225,14 +252,16 @@ timeline duration      = 2.50 s
 A normal attack resolves these layers:
 
 - Basic physical hit using total AD.
+- Passive fire wave while eligible.
 - Item on-hits.
 - E passive on-hit.
 - Primed Spellblade.
-- Passive fire wave while eligible.
 - Phantom Hit repeat when due.
 
-All components on one frame use the state captured at that frame's start.
-Stacks or amplifiers earned there affect later eligible frames.
+Attack-frame-gated stacks and amplifiers use the state captured at that frame's
+start. Stacks or amplifiers earned there affect later eligible frames.
+Shadowflame is the exception: it reads live HP before every damage instance, so
+an earlier component can enable the crit for later components of the same hit.
 
 ## Target, resistance, and penetration
 
@@ -258,15 +287,15 @@ applied damage = raw damage * outgoing multiplier * resistance multiplier
 true-damage resistance multiplier = 1
 ```
 
-Shadowflame reads HP at the frame snapshot:
+Shadowflame reads live HP immediately before each eligible instance:
 
 ```text
 condition = current HP < 0.40 * maximum HP
 eligible magic/true multiplier = 1.20
 ```
 
-Crossing the threshold during a frame does not change earlier components from
-that frame.
+Crossing the threshold during an attack does not retroactively change earlier
+components, but later magic or true-damage components can crit immediately.
 
 ## Movement speed and adaptive force
 
@@ -301,7 +330,13 @@ else:
   zero-stat tie -> AD for Kayle
 ```
 
-Rabadon's multiplier also applies to adaptive AP.
+Rabadon's multiplier also applies to adaptive AP. Percentage AP modifiers add
+together before multiplying the raw AP pool:
+
+```text
+final AP = raw AP * (1 + Rabadon 30% + mid-role 8%)
+         = raw AP * 1.38
+```
 
 Swiftmarch and the mid-role reward:
 
@@ -309,6 +344,8 @@ Swiftmarch and the mid-role reward:
 Swiftmarch flat MS = 65
 Swiftmarch adaptive force = 0.05 * current displayed MS
 mid-role bonus AD/AP multiplier = 1.08
+
+Rabadon + mid-role AP multiplier = 1 + 0.30 + 0.08 = 1.38
 
 evolved mid-role boots are illegal at level 19..20
 ```
@@ -499,7 +536,7 @@ Press the Attack:
   proc raw adaptive = 40 at level 1 -> 160 at level 18
   proc raw adaptive at level 20 = 174.117647
   later-damage amplifier = 8%
-  cooldown = 6 s
+  later three-hit triggers remain available while the amplifier is active
 
 Lethal Tempo:
   maximum stacks = 6

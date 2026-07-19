@@ -212,7 +212,7 @@ Void Staff, Shadowflame, and their combination matched Q into attack cases.
 The mechanic is called **Shadowflame crit** in this project.
 
 ```text
-condition = frame-start current HP < 40% maximum HP
+condition = live current HP before the damage instance < 40% maximum HP
 multiplier = 1.20 to eligible magic and true damage
 
 dummy maximum HP = 1200
@@ -226,7 +226,25 @@ below threshold after five attacks:
   dummy total         = 1052
 ```
 
-Crossing the threshold during a frame does not change earlier components.
+The level-18 Dusk and Dawn build isolated the within-attack ordering:
+
+```text
+setup      = Dusk and Dawn, Nashor's, Deathcap, Void Staff, Shadowflame,
+             Swiftmarch; PTA; 10 Alacrity; Celerity; Gathering Storm at 25 min
+dummy      = 3500 HP, 60 armor, 60 MR
+sequence   = Q -> AA -> AA -> AA
+
+Practice Tool total = 2636
+simulator total     = 2635.68
+
+third AA physical             = 66
+third AA combined magic       = 552 (Shadowflame crit)
+resolved order                = physical -> fire wave -> normal on-hits
+```
+
+The physical hit leaves the target above the threshold. The non-critical fire
+wave crosses it, then Nashor's and E passive crit immediately. Earlier
+components are not changed retroactively.
 
 ### Q into E timing policy
 
@@ -287,8 +305,40 @@ exact final case = 2160.51
 separate Phantom component = 98 magic
 ```
 
-The UI uses the fast reset and exposes one E action. The waited branch remains
-an internal regression only.
+The UI exposes one E action and a **Use E for AA cancel** condition. Enabled
+uses the fast-reset branch; disabled waits for the preceding AA's complete
+attack interval. This preserves one E formula while allowing both observed
+execution timings to be backtested.
+
+Level-6 `AA -> E` isolation established that attack windups resolve in whole
+game ticks. Ordinary attack timers stay continuous. The model uses the
+documented Kayle windup instead of manually entered Practice Tool DPS:
+
+```text
+game tick      = 1 / 30 s
+Kayle windup   = 0.193555 / total attack speed
+fast E hit     = ceil(windup / game tick) * game tick + one projectile tick
+waited E hit   = remaining AA cooldown + fast E hit
+```
+
+An `AA -> E -> AA -> AA` Lich Bane isolation also confirmed that E cannot place
+the following ordinary attack on the next game tick. The post-E attack waits
+for its normal `1 / attack speed` cadence. E itself receives Lich Bane's primed
+attack-speed bonus during its windup; after Spellblade is consumed, later
+attacks use the lower unprimed speed.
+
+The level-18 point-blank `Q -> AA -> AA -> AA -> E` isolation additionally
+confirmed that Spellblade readiness must be sampled when E is pressed. Q has
+no modeled travel time, but its windup is aligned to the game clock.
+
+```text
+items       = Lich Bane, Deathcap, Shadowflame, Nashor's, Void Staff, Swiftmarch
+target      = 3500 HP, 30 armor, 30 MR
+displayed   = 93 AD, 755 AP, 1.415 AS
+fast total  = 4734.39
+fast time   = 1.780 s
+fast DPS    = 2660.2
+```
 
 ### Dusk and Dawn cooldown
 

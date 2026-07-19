@@ -133,7 +133,13 @@
       </div>
       <div class="section-description-row">
         <p class="section-description">Add actions in the order they happen.</p>
-        <span class="limit-status" id="comboLimitStatus" aria-live="polite">0 / 100 actions</span>
+        <div class="combo-meta-controls">
+          <label class="check combo-cancel-check" title="Use E immediately after the preceding basic attack instead of waiting for the normal attack interval.">
+            <input type="checkbox" id="useEForAaCancel" checked>
+            <span>Use E for AA cancel</span>
+          </label>
+          <span class="limit-status" id="comboLimitStatus" aria-live="polite">0 / 100 actions</span>
+        </div>
       </div>
       <div class="combo-palette" id="comboPalette"></div>
       <div class="combo-track" id="comboTrack" aria-label="Selected combo sequence">
@@ -145,6 +151,9 @@
       <div class="results-heading">
         <h2>Results</h2>
       </div>
+      <p class="results-accuracy-note">
+        Results are typically more than 99% accurate. Differences of up to 1% may occur because of known in-game inconsistencies, including Kayle damage varying slightly with target distance. These small variances do not represent a different combo execution and do not materially change the damage discrepancy between builds; the simulator will still reliably identify which build has the higher damage output.
+      </p>
       <div id="resultsContainer" class="results-grid">
         <div class="empty-state">
           <span class="empty-icon" aria-hidden="true">◇</span>

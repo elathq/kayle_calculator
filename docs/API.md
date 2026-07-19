@@ -427,6 +427,7 @@ rune IDs are rejected.
 | `pre_stacked_yun_tal` | `true` | Boolean |
 | `fleet_starts_energized` | `true` | Boolean |
 | `assume_river` | `false` | Boolean |
+| `use_e_for_aa_cancel` | `true` | Boolean; skips the old AA cooldown before E's attack-speed-scaled windup |
 
 ### Complete payload
 
@@ -487,7 +488,8 @@ rune IDs are rejected.
     "pre_stacked_rageblade": false,
     "pre_stacked_yun_tal": true,
     "fleet_starts_energized": true,
-    "assume_river": false
+    "assume_river": false,
+    "use_e_for_aa_cancel": true
   }
 }
 ```

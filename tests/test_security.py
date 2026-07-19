@@ -61,6 +61,16 @@ class SecurityValidationTests(unittest.TestCase):
             ["adaptive", "adaptive", "health"],
         )
 
+    def test_e_aa_cancel_option_requires_a_boolean(self):
+        payload = minimal_payload()
+        payload["options"]["use_e_for_aa_cancel"] = True
+        validated = validate_simulation_payload(payload)
+        self.assertIs(validated["options"]["use_e_for_aa_cancel"], True)
+
+        payload["options"]["use_e_for_aa_cancel"] = "yes"
+        with self.assertRaisesRegex(RequestValidationError, "true or false"):
+            validate_simulation_payload(payload)
+
     def test_public_runes_use_readable_keys_instead_of_numeric_ids(self):
         payload = minimal_payload()
         payload["builds"][0]["runes"].update({

@@ -107,7 +107,7 @@ Shadowflame contributes
 $$
 C_i =
 \begin{cases}
-1.20, & \text{magic or true damage and frame-start HP}<0.40H_{\max} \\
+1.20, & \text{magic or true damage and live HP before the instance}<0.40H_{\max} \\
 1, & \text{otherwise}
 \end{cases}
 $$
@@ -264,6 +264,10 @@ idle.
   and receive a red outline at the exact invalid sequence position.
 - Random critical strikes use expected damage.
 - Q before E is assumed to hit before E; target distance is not an input.
+- **Use E for AA cancel** switches a directly following `AA -> E` between the
+  fast reset and the normal full attack interval. Windups use Kayle's current
+  attack speed and align to the game's 30 Hz clock; ordinary attack timers stay
+  continuous. Q is always treated as a point-blank hit with no travel time.
 - Mana, multi-target chains, takedown-only effects, shields, and selected
   utility effects are outside the model.
 - Top-lane quest levels and evolved mid-lane boots are mutually exclusive.

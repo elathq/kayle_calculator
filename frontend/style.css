@@ -386,6 +386,16 @@ select:focus, input:focus {
   letter-spacing: .04em;
 }
 .limit-status.at-limit { color: var(--danger); }
+.combo-meta-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.combo-cancel-check {
+  white-space: nowrap;
+}
 
 .secondary-btn {
   padding: 7px 11px;
@@ -623,8 +633,15 @@ select:focus, input:focus {
 .results-heading {
   justify-content: flex-start;
   gap: 0;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
   padding: 0 2px;
+}
+.results-accuracy-note {
+  max-width: 920px;
+  margin: 0 2px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 .results-grid {
   display: grid;
@@ -1219,6 +1236,15 @@ details.breakdown summary {
   .config-column { display: flex; }
   .panel-head { align-items: flex-start; }
   .section-description-row { padding-left: 0; }
+  .combo-panel .section-description-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .combo-meta-controls {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
   .slots { grid-template-columns: repeat(3, 52px); }
   .build-body { padding-left: 14px; }
   .build-name { width: auto; min-width: 77px; max-width: 126px; }

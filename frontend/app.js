@@ -945,6 +945,7 @@ async function simulate() {
         relentless_stacks: +$("relentlessStacks").value || 0,
         fleet_starts_energized: $("fleetEnergized").checked,
         assume_river: $("assumeRiver").checked,
+        use_e_for_aa_cancel: $("useEForAaCancel").checked,
       },
     };
     const res = await fetch(`${API}/api/simulate`, {
@@ -1070,7 +1071,7 @@ function renderResults(results) {
       </div>
       <div class="result-metrics">
         <div class="result-metric"><span>Total damage</span><strong>${fmtDamage(r.total_damage)}</strong></div>
-        <div class="result-metric"><span>DPS</span><strong>${fmtDamage(r.dps)}</strong></div>
+        <div class="result-metric"><span>DPS</span><strong>≈${fmtDamage(r.dps)}</strong></div>
         <div class="result-metric" title="Highest applied damage in any rolling one-second interval"><span>1s burst</span><strong>${fmtDamage(r.burst_damage_1s)}</strong></div>
       </div>
       <div class="damage-composition">

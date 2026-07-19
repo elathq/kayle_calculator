@@ -4,7 +4,7 @@ Executes an ordered combo (list of actions) against an enemy and returns a
 full damage timeline. Respects:
   - total AS = base_as + as_ratio * sum(bonus AS %) / 100, capped at 2.50
     (Hail of Blades may exceed the cap while its stacks last)
-  - on-hit layering: total AD + item on-hits + E passive + fire wave + spellblade
+  - attack layering: total AD + fire wave + item on-hits + E passive + spellblade
   - Zeal stacking (6%/stack, Exalted at 5), Rageblade Seething/Phantom Hit
   - Spellblade priming/consumption with 1.5s internal cooldown
   - Q's 15% armor/MR shred window, % then flat magic pen, Shadowflame crit
@@ -16,6 +16,8 @@ full damage timeline. Respects:
     and Cheap Shot / Scorch. Adaptive effects deal physical if bonus AD > AP,
     otherwise magic (evaluated from item stats).
 """
+
+import math
 
 from .data.kayle_data import (
     KAYLE_AS, PASSIVE, Q, W, E, R,
@@ -29,6 +31,13 @@ AS_CAP = 2.5
 SPELLBLADE_CD = 1.5
 MID_ROLE_QUEST_STAT_MULTIPLIER = 1.08
 FLEET_VISUAL_SYNC_DELAY = 0.1
+GAME_TICK_SECONDS = 1.0 / 30.0
+E_PROJECTILE_TICKS = 1
+
+
+def _game_ticks(duration):
+    """Round a positive duration up to League's 30 Hz simulation clock."""
+    return max(1, math.ceil(duration / GAME_TICK_SECONDS - 1e-9))
 
 
 class Simulation:
@@ -58,6 +67,8 @@ class Simulation:
         self.current_action_index = None
         self.damage_frame_time = None
         self.damage_frame_start_hp = self.enemy_hp
+        self.pending_e_input_time = None
+        self.pending_e_missing_hp = None
 
         # rune-related user inputs
         self.game_time_min = float(self.options.get("game_time_min", 25))
@@ -71,6 +82,8 @@ class Simulation:
         self.fleet_starts_energized = bool(
             self.options.get("fleet_starts_energized", True))
         self.assume_river = bool(self.options.get("assume_river", False))
+        self.use_e_for_aa_cancel = bool(
+            self.options.get("use_e_for_aa_cancel", True))
         self.items = self._resolve_items(item_keys)
         self._compute_stats()
         self._init_state()
@@ -254,13 +267,16 @@ class Simulation:
             MID_ROLE_QUEST_STAT_MULTIPLIER
             if self.mid_role_quest_completed else 1.0)
         self.static_bonus_ad = (ad + extra_ad) * self.role_quest_stat_multiplier
-        self.static_ap_pre_mult = (ap + extra_ap) * self.role_quest_stat_multiplier
+        self.static_ap_pre_mult = ap + extra_ap
         self.bonus_ad = self.static_bonus_ad
         self.total_ad = self.base_ad + self.bonus_ad
-        # Magical Opus multiplies ALL ability power, including rune-granted AP
-        # ("stacks recursively with other sources of ability power").
-        self.ap_mult = ap_mult
-        self.ap = self.static_ap_pre_mult * ap_mult
+        # Percentage AP modifiers are additive with one another. Rabadon's
+        # +30% total AP and the mid-role quest's +8% bonus AP therefore form a
+        # 1.38 multiplier instead of recursively multiplying to 1.404. This
+        # ordering is confirmed by the level-18 Practice Tool snapshot where
+        # this build displays 732 AP.
+        self.ap_mult = ap_mult + (self.role_quest_stat_multiplier - 1.0)
+        self.ap = self.static_ap_pre_mult * self.ap_mult
         self.item_as = as_pct
         self.bonus_hp = hp
         self.haste = haste
@@ -466,7 +482,7 @@ class Simulation:
         """
         base_ap_pre_mult = (
             self.static_ap_pre_mult
-            + self.dynamic_conq_ap_pre_mult * self.role_quest_stat_multiplier)
+            + self.dynamic_conq_ap_pre_mult)
         base_bonus_ad = (
             self.static_bonus_ad
             + self.dynamic_conq_ad * self.role_quest_stat_multiplier)
@@ -479,9 +495,7 @@ class Simulation:
                      * movement_speed) if self.has_swiftmarch else 0.0
             new_ap = (base_ap_pre_mult * self.ap_mult
                       if self.adaptive_physical
-                      else (base_ap_pre_mult
-                            + force * self.role_quest_stat_multiplier)
-                      * self.ap_mult)
+                      else (base_ap_pre_mult + force) * self.ap_mult)
             new_bonus_ad = (base_bonus_ad
                             + 0.6 * force * self.role_quest_stat_multiplier
                             if self.adaptive_physical
@@ -526,6 +540,38 @@ class Simulation:
         self._bonus_as_pct = bonus     # remembered for the Lethal Tempo bolt
         total = KAYLE_AS["base_as"] + KAYLE_AS["as_ratio"] * bonus / 100.0
         return total if uncapped else min(AS_CAP, total)
+
+    def _followup_e_attack_speed(self, at_time):
+        """Preview the AS of an E empowered attack after an AA reset.
+
+        E primes Spellblade before its attack, so Lich Bane's primed AS must
+        shorten E's windup. Hail of Blades can also restore an empowered stack
+        for an attack reset, and a ready Yun Tal starts Flurry on attack.
+        Preview those states without consuming or starting their effects.
+        """
+        saved_primed = self.spellblade_primed
+        saved_hob_stacks = self.hob_stacks
+        saved_flurry_until = self.yun_tal_flurry_until
+        saved_time = self.time
+        try:
+            self.time = at_time
+            if (self.spellblade_key == "lich_bane"
+                    and at_time >= self.spellblade_cd_until - 1e-9):
+                self.spellblade_primed = True
+            if ((m := self._rune(9923))
+                    and self.hob_stacks <= 0
+                    and self.hob_resets_used < m["extra_stacks"]):
+                self.hob_stacks = 1
+            if (self.has_yun_tal
+                    and self.time >= self.yun_tal_flurry_ready_at - 1e-9):
+                duration = ITEMS["yun_tal_wildarrows"]["flurry"]["duration"]
+                self.yun_tal_flurry_until = self.time + duration
+            return self.attack_speed()
+        finally:
+            self.spellblade_primed = saved_primed
+            self.hob_stacks = saved_hob_stacks
+            self.yun_tal_flurry_until = saved_flurry_until
+            self.time = saved_time
 
     # ---------- damage pipeline ----------
 
@@ -659,8 +705,10 @@ class Simulation:
         multiplier = self._amp_multiplier(at_time)
         if dtype in ("magic", "true") and self.has_shadowflame_crit:
             shadowflame_crit = ITEMS["shadowflame"]["shadowflame_crit"]
-            target_hp = self._target_hp_at_frame_start(at_time)
-            if target_hp < shadowflame_crit["threshold"] * self.enemy_max_hp:
+            # Shadowflame reads live HP before each damage instance. Practice
+            # Tool confirms that an earlier component of one attack can cross
+            # 40% HP and make only its later magic components critically hit.
+            if self.enemy_hp < shadowflame_crit["threshold"] * self.enemy_max_hp:
                 multiplier *= shadowflame_crit["amp"]
                 source += " (Shadowflame crit)"
         resistance = None
@@ -714,22 +762,23 @@ class Simulation:
         self.end_time = max(self.end_time, self.time)
         self._flush_scheduled(self.time)
 
-    def _check_cd(self, key, cooldown, label):
+    def _check_cd(self, key, cooldown, label, at_time=None):
+        used_at = self.time if at_time is None else at_time
         ready = self.cooldowns.get(key, -1e9)
-        if self.time < ready - 1e-9:
+        if used_at < ready - 1e-9:
             if key in {"Q", "W", "E", "R"}:
                 self.cooldown_errors.append({
                     "action_index": self.current_action_index,
                     "ability": key,
-                    "used_at": round(self.time, 3),
+                    "used_at": round(used_at, 3),
                     "ready_at": round(ready, 3),
                 })
             else:
                 self.warnings.append(
-                    f"{label} used at t={self.time:.2f}s but its cooldown is not ready "
+                    f"{label} used at t={used_at:.2f}s but its cooldown is not ready "
                     f"until t={ready:.2f}s (skipped).")
             return False
-        self.cooldowns[key] = self.time + cooldown
+        self.cooldowns[key] = used_at + cooldown
         return True
 
     def _hasted(self, cd, ultimate=False):
@@ -1188,10 +1237,11 @@ class Simulation:
     def _apply_onhits(
             self, at_time, tag="", grants_pta=True,
             defer_terminus_stack=False):
-        """Item on-hits + Kayle E passive as one on-hit application.
-        grants_pta=False for the Dusk & Dawn repeat — in-game verified: a clean
-        E (3 applications incl. the repeat) does NOT proc PTA, so the repeat
-        gives no stack. Rageblade's Phantom Hit does grant stacks (wiki)."""
+        """Apply item on-hits, Kayle E passive, and an optional PTA stack.
+
+        Dusk & Dawn's repeat and Rageblade's Phantom Hit both grant PTA stacks;
+        callers can disable the stack for any future non-stacking repeat.
+        """
         self._refresh_dynamic_stats(at_time)
         for k in self.items:
             it = ITEMS[k]
@@ -1227,7 +1277,6 @@ class Simulation:
                 self._adaptive_deal(dmg, "Press the Attack", at_time)
                 if self.pta_amp_from is None:
                     self.pta_amp_from = at_time  # amp for the rest of the combo
-                self.cooldowns["pta"] = at_time + m["cd"]
 
     def _fire_wave(self, at_time):
         growth_levels = max(
@@ -1250,16 +1299,21 @@ class Simulation:
 
     # ---------- actions ----------
 
-    def do_attack(self):
-        transcendent = self.level >= PASSIVE["transcendent_level"]
-        if not transcendent:
-            self.zeal = min(PASSIVE["zeal_max_stacks"], self.zeal + 1)
+    def do_attack(self, e_follows=False, cancel_into_e=False):
         self._refresh_dynamic_stats(self.time)
 
         # Hail of Blades: triggers on the first windup, benefits that attack
         if (m := self._rune(9923)) and not self.hob_triggered:
             self.hob_triggered = True
             self.hob_stacks = m["stacks"]
+
+        # The attack timer starts with the attack speed available when the
+        # windup begins. On-attack Zeal/Lethal Tempo stacks affect later
+        # attacks, not a timer which has already started.
+        attack_timer_speed = self.attack_speed()
+        transcendent = self.level >= PASSIVE["transcendent_level"]
+        if not transcendent:
+            self.zeal = min(PASSIVE["zeal_max_stacks"], self.zeal + 1)
         # Lethal Tempo stack granted on-attack (benefits subsequent AS reads)
         if (m := self._rune(8008)):
             self.lt_stacks = min(m["max_stacks"], self.lt_stacks + 1)
@@ -1267,7 +1321,6 @@ class Simulation:
         t = self.time
         self._yun_tal_launch_attack(t)
         speed = self.attack_speed()   # also snapshots bonus AS % for the bolt
-        period = 1.0 / speed
         crit_chance_snapshot = self.crit_chance
         attack_dealt = 0.0
         self._begin_basic_attack(t)
@@ -1283,7 +1336,13 @@ class Simulation:
 
         # 1. physical hit
         attack_dealt += self._deal_basic_attack("Basic attack", t)
-        # 2. on-hit package (items + E passive + PTA stacking)
+        # 2. fire wave. Practice Tool shows the wave resolves before normal
+        # on-hits: when it crosses Shadowflame's threshold, later on-hits in
+        # this same attack crit while the wave itself does not.
+        exalted = transcendent or self.zeal >= PASSIVE["zeal_max_stacks"]
+        if self.level >= PASSIVE["aflame_level"] and exalted:
+            self._fire_wave(t)
+        # 3. on-hit package (items + E passive + PTA stacking)
         # Terminus grants Light/Dark after the complete triggering attack. In
         # particular, Practice Tool shows that attack 2's fire wave still uses
         # zero Dark stacks; attack 3 is the first to use the new penetration.
@@ -1305,14 +1364,10 @@ class Simulation:
             hpct = m["heal_melee"] if self.is_melee else m["heal_ranged"]
             self._heal(hpct * self.kayle_max_hp, "Grasp heal", t)
             self.grasp_consumed_at = t
-        # 3. spellblade proc
+        # 4. spellblade proc
         self._consume_spellblade(t)
-        # 5. fire wave (Aflame + Exalted; the attack reaching 5 stacks fires it)
-        exalted = transcendent or self.zeal >= PASSIVE["zeal_max_stacks"]
-        if self.level >= PASSIVE["aflame_level"] and exalted:
-            self._fire_wave(t)
         self._terminus_hit(t)
-        # 6. Rageblade stacking / Phantom Hit
+        # 5. Rageblade stacking / Phantom Hit
         if self.has_rageblade:
             rb = ITEMS["guinsoos_rageblade"]["seething"]
             was_at_max = self.seething >= rb["max_stacks"]
@@ -1334,10 +1389,41 @@ class Simulation:
         self.attack_count += 1
         self._finish_basic_attack()
         self._finish_yun_tal_attack(t, crit_chance_snapshot)
-        self._advance(period)
+        if e_follows:
+            # Damage-to-damage AA -> E timing. E is a ranged empowered attack:
+            # after resetting the old timer it must still complete its own
+            # attack-speed-scaled windup and one projectile/registration tick.
+            # Without the cancel, first finish the old attack's cooldown phase.
+            recovery_speed = self.attack_speed()
+            old_period = 1.0 / recovery_speed
+            old_windup_ticks = _game_ticks(
+                KAYLE_AS["windup_percent"] / attack_timer_speed)
+            recovery = 0.0
+            if not cancel_into_e:
+                recovery = max(
+                    0.0,
+                    old_period
+                    - (old_windup_ticks + E_PROJECTILE_TICKS)
+                    * GAME_TICK_SECONDS,
+                )
+            self._advance(recovery)
+            self.pending_e_input_time = self.time
+            self.pending_e_missing_hp = max(
+                0.0, self.enemy_max_hp - self.enemy_hp)
+            e_windup_ticks = _game_ticks(
+                KAYLE_AS["windup_percent"]
+                / self._followup_e_attack_speed(self.time))
+            e_hit_ticks = e_windup_ticks + E_PROJECTILE_TICKS
+            self._advance(e_hit_ticks * GAME_TICK_SECONDS)
+        else:
+            # Use post-hit AS for the next cadence. In particular, Lich Bane's
+            # temporary 50% AS is gone after its empowered hit is consumed.
+            self._advance(1.0 / self.attack_speed())
 
-    def _prime_spellblade(self):
-        if self.spellblade_key:
+    def _prime_spellblade(self, at_time=None):
+        cast_at = self.time if at_time is None else at_time
+        if (self.spellblade_key
+                and cast_at >= self.spellblade_cd_until - 1e-9):
             self.spellblade_primed = True
             self.dd_repeat_used = False
 
@@ -1378,7 +1464,11 @@ class Simulation:
         if rank == 0:
             self.warnings.append("Q used with no rank — skipped.")
             return None
-        cast = KAYLE_AS["windup_percent"] / self.attack_speed()
+        # Point-blank Q: no projectile travel is added. Its cast/windup still
+        # resolves on the 30 Hz game clock.
+        cast = (_game_ticks(
+            KAYLE_AS["windup_percent"] / self.attack_speed())
+            * GAME_TICK_SECONDS)
         if not self._check_cd("Q", self._hasted(Q["cooldown"][rank - 1]), "Q"):
             return None
         t = self.time
@@ -1429,7 +1519,7 @@ class Simulation:
         self._prime_spellblade()
         self._advance(W["cast_time"])
 
-    def do_e(self, timing="instant"):
+    def do_e(self, timing="instant", aa_follows=False):
         """Execute E as an empowered basic attack and attack-timer reset.
 
         Practice Tool isolation on 2026-07-17 established this package:
@@ -1443,10 +1533,21 @@ class Simulation:
         if rank == 0:
             self.warnings.append("E used with no rank — skipped.")
             return
-        if not self._check_cd("E", self._hasted(E["cooldown"][rank - 1]), "E"):
+        cast_at = (
+            self.pending_e_input_time
+            if self.pending_e_input_time is not None else self.time)
+        pending_missing_hp = self.pending_e_missing_hp
+        self.pending_e_input_time = None
+        self.pending_e_missing_hp = None
+        if not self._check_cd(
+                "E", self._hasted(E["cooldown"][rank - 1]), "E",
+                at_time=cast_at):
             return
         t = self.time
-        missing_at_cast = max(0.0, self.enemy_max_hp - self.enemy_hp)
+        missing_at_cast = (
+            pending_missing_hp
+            if pending_missing_hp is not None
+            else max(0.0, self.enemy_max_hp - self.enemy_hp))
         phantom_will_proc = False
         if self.has_rageblade:
             rb = ITEMS["guinsoos_rageblade"]["seething"]
@@ -1470,7 +1571,7 @@ class Simulation:
 
         self._yun_tal_launch_attack(t)
         crit_chance_snapshot = self.crit_chance
-        self._prime_spellblade()
+        self._prime_spellblade(cast_at)
         self.attack_speed()  # snapshot bonus AS for Lethal Tempo's bolt
         self._begin_basic_attack(t)
         self._navori_launch_attack(t)
@@ -1521,7 +1622,9 @@ class Simulation:
             self._deal(pct * missing_at_cast, "magic", "E active (missing HP)", t)
             self._apply_bloodletter_stack(t, "e_active")
 
-        # Passive fire wave and Rageblade also treat E as an attack.
+        # Passive fire wave and Rageblade also treat E as an attack. E keeps
+        # its separately calibrated ordering; the normal-AA wave-before-on-hit
+        # finding does not override the empowered-attack isolation.
         transcendent = self.level >= PASSIVE["transcendent_level"]
         exalted = transcendent or self.zeal >= PASSIVE["zeal_max_stacks"]
         if self.level >= PASSIVE["aflame_level"] and exalted:
@@ -1545,9 +1648,12 @@ class Simulation:
         self.attack_count += 1
         self._finish_basic_attack()
         self._finish_yun_tal_attack(t, crit_chance_snapshot)
-        # No cast time; advance one game tick so later actions are not on the
-        # PTA proc's frame.
-        self._advance(0.033)
+        # E is an empowered basic attack. A following ordinary attack must
+        # respect the post-E attack cadence; non-attack actions may be issued
+        # on the next game tick after the projectile has registered.
+        self._advance(
+            1.0 / self.attack_speed()
+            if aa_follows else GAME_TICK_SECONDS)
 
     def _dd_repeat(self, at_time):
         """Dusk and Dawn's 'applies on-hit effects again' — instant (same
@@ -1705,13 +1811,27 @@ class Simulation:
                     self._advance(sync_time - self.time)
                 self._activate_pending_fleet(sync_time)
             if kind == "AA":
-                self.do_attack()
+                next_kind = (
+                    self.combo[action_index + 1].get("type")
+                    if action_index + 1 < len(self.combo) else None)
+                e_follows = next_kind == "E"
+                self.do_attack(
+                    e_follows=e_follows,
+                    cancel_into_e=(
+                        self.use_e_for_aa_cancel and e_follows),
+                )
             elif kind == "Q":
                 self.do_q()
             elif kind == "W":
                 self.do_w()
             elif kind == "E":
-                self.do_e(action.get("timing", "instant"))
+                next_kind = (
+                    self.combo[action_index + 1].get("type")
+                    if action_index + 1 < len(self.combo) else None)
+                self.do_e(
+                    action.get("timing", "instant"),
+                    aa_follows=(next_kind == "AA"),
+                )
             elif kind == "R":
                 self.do_r()
             elif kind == "ITEM_ACTIVE":
