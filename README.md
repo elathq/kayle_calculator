@@ -243,7 +243,7 @@ denial-of-service protection remain the host's responsibility.
 
 Bootstrap data is compressed. Versioned scripts, styles, and icons use
 long-lived browser caching, while the HTML entry point revalidates on deploy.
-Render supplies the Git commit for asset versioning.
+Cloud Run supplies the revision identifier used for asset versioning.
 
 When local icon bytes change, increment this value:
 
@@ -252,8 +252,11 @@ backend/data/__init__.py -> ICON_VERSION
 ```
 
 The icon optimizer is maintenance-only and is not part of the hosted runtime.
-Render Free services can sleep when idle; a paid instance is the supported
-always-on option. See [Render's Free service documentation](https://render.com/docs/free).
+Firebase Hosting provides the public `web.app` address and forwards requests to
+Cloud Run. Pushing `main` triggers Cloud Build and deploys a new Cloud Run
+revision automatically. Firebase only needs redeployment when its routing
+configuration changes. Cloud Run may scale to zero while the application is
+idle.
 
 ## Known scope limits
 

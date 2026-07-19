@@ -3,7 +3,7 @@
 Use the hosted API at:
 
 ```text
-https://kayle-calculator.onrender.com
+https://kayle-calculator.web.app
 ```
 
 `POST /api/simulate` requires:

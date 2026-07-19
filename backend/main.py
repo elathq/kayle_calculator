@@ -34,14 +34,14 @@ FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8000"))
 DEPLOY_VERSION = (
-    os.environ.get("RENDER_GIT_COMMIT") or "20260718-security1"
-)[:12]
-IS_RENDER = os.environ.get("RENDER", "").lower() == "true"
+    os.environ.get("K_REVISION") or "20260719-cloud-run"
+)[:64]
+IS_CLOUD_RUN = bool(os.environ.get("K_SERVICE"))
 
 
 def frontend_asset_version():
     """Keep production assets commit-pinned and local edits cache-safe."""
-    if IS_RENDER:
+    if IS_CLOUD_RUN:
         return DEPLOY_VERSION
     latest_asset_mtime = max(
         path.stat().st_mtime_ns
@@ -365,8 +365,7 @@ def handle_simulate(payload: dict) -> dict:
 
 class Handler(BaseHTTPRequestHandler):
 
-    # Keep connections reusable when the app is run without Render's HTTP/2
-    # proxy in front of it.
+    # Keep connections reusable when the app is run without a hosting proxy.
     protocol_version = "HTTP/1.1"
     server_version = "KayleSimulator"
     sys_version = ""
@@ -397,7 +396,7 @@ class Handler(BaseHTTPRequestHandler):
             "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
             "form-action 'self'",
         )
-        if IS_RENDER:
+        if IS_CLOUD_RUN:
             self.send_header(
                 "Strict-Transport-Security", "max-age=31536000")
         super().end_headers()
@@ -616,7 +615,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _client_key(self):
         forwarded = self.headers.get("X-Forwarded-For", "")
-        if IS_RENDER and forwarded:
+        if IS_CLOUD_RUN and forwarded:
             return forwarded.split(",", 1)[0].strip()[:64]
         return str(self.client_address[0])[:64]
 
