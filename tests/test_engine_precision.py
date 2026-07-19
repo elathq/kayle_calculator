@@ -206,6 +206,33 @@ class EnginePrecisionTests(unittest.TestCase):
             options)
         self.assertEqual(four_aa["total_damage"], 516.31)
 
+    def test_dusk_and_dawn_cannot_trigger_pta_twice_while_amp_is_active(self):
+        options = {
+            "rune_ids": [8005, 9104, 8299, 8234, 8236],
+            "shards": ["adaptive", "adaptive", "health_scaling"],
+            "legend_stacks": 0,
+            "game_time_min": 20,
+            "kayle_hp_pct": 100,
+            "pre_stacked_zeal": False,
+            "use_e_for_aa_cancel": False,
+        }
+        items = [
+            "rabadons_deathcap", "dusk_and_dawn", "swiftmarch",
+            "nashors_tooth", "shadowflame", "void_staff",
+        ]
+        combo = [{"type": action}
+                 for action in ("Q", "AA", "AA", "AA", "E")]
+        result = simulate_build(
+            18, {"Q": 5, "W": 5, "E": 5, "R": 3}, items,
+            {"hp": 3500, "current_hp": 3500, "armor": 60, "mr": 60},
+            combo, options,
+        )
+
+        pta_events = [event for event in result["events"]
+                      if event["source"] == "Press the Attack"]
+        self.assertEqual(len(pta_events), 1)
+        self.assertEqual(result["total_damage"], 4529.36)
+
     def test_e_missing_health_uses_hp_before_the_empowered_attack(self):
         options = {
             "rune_ids": [8021, 8009, 9104, 8299, 8226, 8234],

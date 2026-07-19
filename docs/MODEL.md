@@ -536,7 +536,8 @@ Press the Attack:
   proc raw adaptive = 40 at level 1 -> 160 at level 18
   proc raw adaptive at level 20 = 174.117647
   later-damage amplifier = 8%
-  later three-hit triggers remain available while the amplifier is active
+  stacks stop accumulating while the amplifier is active
+  maximum procs in one uninterrupted combo = 1
 
 Lethal Tempo:
   maximum stacks = 6

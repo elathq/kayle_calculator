@@ -194,9 +194,9 @@ RUNE_MATH = {
     # Fleet Footwork: a fully Energized attack grants 20% melee / 15% ranged
     # bonus movement speed for 1 second. The simulator can start Energized.
     8021: {"ms_melee": 20.0, "ms_ranged": 15.0, "duration": 1.0},
-    # Press the Attack: eligible on-hit stacks; 3rd consumes all → proc + 8% amp
-    # leaving combat. The active self-buff does not prevent later three-hit
-    # triggers.
+    # Press the Attack: eligible on-hit stacks; 3rd consumes all -> proc + 8%
+    # amp until leaving combat. Practice Tool confirms that the active self-buff
+    # prevents Kayle from building another three-hit trigger during the combo.
     # 40 at level 1, 160 at level 18, and 174.117647... at level 20.
     8005: {"stacks": 3, "proc_lo": 40, "proc_hi": 160, "amp": 0.08},
     # Lethal Tempo: on-attack stacks (6s), 6%/4.8% AS (melee/ranged), max 6.

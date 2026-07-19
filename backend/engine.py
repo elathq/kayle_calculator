@@ -1270,13 +1270,17 @@ class Simulation:
     def _pta_stack(self, at_time):
         """Press the Attack gains a stack per on-hit application; 3rd procs."""
         if (m := self._rune(8005)):
+            # Practice Tool isolation with Dusk and Dawn confirms that PTA does
+            # not begin building a second trigger while its 8% amp is active.
+            # The proc frame itself remains unamplified; later damage is amped.
+            if self.pta_amp_from is not None:
+                return
             self.pta_stacks += 1
             if self.pta_stacks >= m["stacks"]:
                 self.pta_stacks = 0
                 dmg = self._lerp(m["proc_lo"], m["proc_hi"])
                 self._adaptive_deal(dmg, "Press the Attack", at_time)
-                if self.pta_amp_from is None:
-                    self.pta_amp_from = at_time  # amp for the rest of the combo
+                self.pta_amp_from = at_time  # amp for the rest of the combo
 
     def _fire_wave(self, at_time):
         growth_levels = max(

@@ -155,6 +155,38 @@ later-damage amplifier = 8%
 The triggering frame is not amplified. The level-scaling slope continues
 through the top-quest extension.
 
+#### Dusk and Dawn proc lockout
+
+This test isolated whether Dusk and Dawn's repeated on-hit package can trigger
+PTA again after PTA has already activated.
+
+```text
+level                    = 18
+target                   = 3500 HP, 60 armor, 60 MR
+displayed stats          = 93 AD, 744 AP, 1.482 attack speed
+items                    = Deathcap, Dusk and Dawn, Swiftmarch,
+                           Nashor's Tooth, Shadowflame, Void Staff
+Gathering Storm          = 20 minutes
+E AA cancel              = off
+
+Q -> AA -> AA -> AA
+Practice Tool total      = 2685
+simulator before fix     = 2708.74
+difference               = +0.88%
+
+Q -> AA -> AA -> AA -> E
+Practice Tool total      = 4500
+simulator before fix     = 4708.73
+second simulated PTA     = 179.38
+simulator after fix      = 4529.36
+difference after fix     = +0.65%
+```
+
+The first Dusk and Dawn repeat helps reach the initial PTA trigger on the
+second basic attack. Once PTA is active, the third attack, E, and E's repeated
+on-hit package do not build or trigger PTA again. Its 8% outgoing amplifier
+continues to affect later frames.
+
 ### Fire wave and top-quest levels
 
 ```text
