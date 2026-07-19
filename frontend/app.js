@@ -268,6 +268,40 @@ function removeBuild(id) {
   renderPalette();
 }
 
+function duplicateBuild(id) {
+  if (state.builds.length >= MAX_BUILDS) return;
+  const sourceIndex = state.builds.findIndex((b) => b.id === id);
+  if (sourceIndex < 0) return;
+  const source = state.builds[sourceIndex];
+  const existingNames = new Set(state.builds.map((b) => b.name));
+  let copyNumber = 1;
+  let copyName = "";
+  do {
+    const suffix = copyNumber === 1 ? " copy" : ` copy ${copyNumber}`;
+    copyName = source.name.slice(0, MAX_BUILD_NAME_LENGTH - suffix.length) + suffix;
+    copyNumber += 1;
+  } while (existingNames.has(copyName));
+
+  buildSeq += 1;
+  const runes = source.runes || defaultRunes();
+  state.builds.splice(sourceIndex + 1, 0, {
+    id: buildSeq,
+    name: copyName,
+    items: [...source.items],
+    collapsed: false,
+    runes: {
+      primary: runes.primary,
+      secondary: runes.secondary,
+      keystone: runes.keystone,
+      primarySlots: [...runes.primarySlots],
+      secondarySlots: runes.secondarySlots.map((slot) => ({ ...slot })),
+      shards: [...runes.shards],
+    },
+  });
+  renderBuilds();
+  renderPalette();
+}
+
 function buildCost(b) {
   return b.items.reduce((s, k) => s + (k ? ITEM_BY_KEY[k].cost : 0), 0);
 }
@@ -296,9 +330,14 @@ function renderBuilds() {
     nameInput.className = "build-name";
     nameInput.value = b.name;
     nameInput.maxLength = MAX_BUILD_NAME_LENGTH;
+    const resizeNameInput = () => {
+      nameInput.size = Math.max(10, Math.min(28, nameInput.value.length + 2));
+    };
+    resizeNameInput();
     nameInput.addEventListener("click", (e) => e.stopPropagation());
     nameInput.addEventListener("input", () => {
       b.name = nameInput.value.slice(0, MAX_BUILD_NAME_LENGTH);
+      resizeNameInput();
     });
     const runeBtn = document.createElement("button");
     runeBtn.className = "rune-btn";
@@ -315,6 +354,23 @@ function renderBuilds() {
     const cost = document.createElement("span");
     cost.className = "build-cost";
     cost.textContent = `${buildCost(b).toLocaleString()} g`;
+    const duplicate = document.createElement("button");
+    duplicate.className = "duplicate-build";
+    duplicate.type = "button";
+    duplicate.disabled = atBuildLimit;
+    duplicate.title = atBuildLimit
+      ? `Maximum ${MAX_BUILDS} builds reached`
+      : "Duplicate build";
+    duplicate.setAttribute("aria-label", `Duplicate ${b.name}`);
+    duplicate.innerHTML = `
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="5" y="3" width="8" height="9" rx="1.5"></rect>
+        <path d="M3 6.5V12a1 1 0 0 0 1 1h5.5"></path>
+      </svg>`;
+    duplicate.addEventListener("click", (e) => {
+      e.stopPropagation();
+      duplicateBuild(b.id);
+    });
     const rm = document.createElement("button");
     rm.className = "remove-build";
     rm.type = "button";
@@ -322,7 +378,7 @@ function renderBuilds() {
     rm.title = "Remove build";
     rm.setAttribute("aria-label", `Remove ${b.name}`);
     rm.addEventListener("click", (e) => { e.stopPropagation(); removeBuild(b.id); });
-    head.append(nameInput, runeBtn, cost, rm);
+    head.append(nameInput, duplicate, runeBtn, cost, rm);
     head.addEventListener("click", () => { b.collapsed = !b.collapsed; renderBuilds(); });
 
     const body = document.createElement("div");
@@ -389,7 +445,6 @@ function itemPickerTabs(item) {
 
 function openOverlay(buildId, slotIdx) {
   overlayTarget = { buildId, slotIdx };
-  activeItemTab = "starter";
   renderItemPicker();
   $("itemOverlay").classList.remove("hidden");
 }
@@ -882,6 +937,7 @@ function renderResults(results) {
     return;
   }
   const bestDps = Math.max(...results.map((r) => r.dps));
+  const bestBurst = Math.max(...results.map((r) => r.burst_damage_1s));
   const fmtDamage = (value) => Number(value).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
@@ -889,8 +945,19 @@ function renderResults(results) {
 
   for (const r of results) {
     const card = document.createElement("div");
-    const isBest = r.dps === bestDps && results.length > 1;
-    card.className = "result-card" + (isBest ? " is-best" : "");
+    const isComparison = results.length > 1;
+    const isTopDps = isComparison && r.dps === bestDps;
+    const isTopBurst = isComparison && r.burst_damage_1s === bestBurst;
+    const badges = [
+      [isTopDps, "Top DPS", "top-dps"],
+      [isTopBurst, "Top burst", "top-burst"],
+    ].filter(([wins]) => wins);
+    const leaderClass = isTopDps
+      ? " is-top-dps"
+      : isTopBurst
+        ? " is-top-burst"
+        : "";
+    card.className = "result-card" + leaderClass;
 
     const t = r.totals;
     const total = Math.max(r.total_damage, 0.001);
@@ -936,7 +1003,9 @@ function renderResults(results) {
           <h3>${escapeHtml(r.build_name)}</h3>
           <span class="result-icons"></span>
         </div>
-        ${isBest ? '<span class="best-badge">Top DPS</span>' : ""}
+        <span class="result-badges">
+          ${badges.map(([, label, cls]) => `<span class="best-badge ${cls}">${label}</span>`).join("")}
+        </span>
       </div>
       <div class="result-metrics">
         <div class="result-metric"><span>Total damage</span><strong>${fmtDamage(r.total_damage)}</strong></div>
