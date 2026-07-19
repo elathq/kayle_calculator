@@ -260,7 +260,8 @@ idle.
 
 ## Known scope limits
 
-- Cooldown-invalid actions remain in the entered combo and produce warnings.
+- Cooldown-invalid Q/W/E/R actions block UI results, open a readiness message,
+  and receive a red outline at the exact invalid sequence position.
 - Random critical strikes use expected damage.
 - Q before E is assumed to hit before E; target distance is not an input.
 - Mana, multi-target chains, takedown-only effects, shields, and selected

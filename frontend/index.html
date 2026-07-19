@@ -193,6 +193,16 @@
   </div>
 </div>
 
+<div class="overlay hidden" id="cooldownOverlay">
+  <div class="overlay-box cooldown-box" role="alertdialog" aria-modal="true"
+       aria-labelledby="cooldownOverlayTitle" aria-describedby="cooldownMessages">
+    <div class="cooldown-symbol" aria-hidden="true">!</div>
+    <h3 id="cooldownOverlayTitle">Ability unavailable</h3>
+    <div class="cooldown-messages" id="cooldownMessages"></div>
+    <button class="simulate-btn cooldown-confirm" id="closeCooldownBtn" type="button">OK</button>
+  </div>
+</div>
+
 <script src="app.js?v=__DEPLOY_VERSION__"></script>
 </body>
 </html>

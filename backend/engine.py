@@ -54,6 +54,8 @@ class Simulation:
         self.damage_instances = []  # full-precision (timestamp, applied damage)
         self.pre_mitigation_total = 0.0
         self.cooldowns = {}        # action -> ready_at
+        self.cooldown_errors = []  # invalid Q/W/E/R uses with combo indexes
+        self.current_action_index = None
         self.damage_frame_time = None
         self.damage_frame_start_hp = self.enemy_hp
 
@@ -715,10 +717,20 @@ class Simulation:
     def _check_cd(self, key, cooldown, label):
         ready = self.cooldowns.get(key, -1e9)
         if self.time < ready - 1e-9:
-            self.warnings.append(
-                f"{label} used at t={self.time:.2f}s but its cooldown is not ready "
-                f"until t={ready:.2f}s (simulated anyway).")
+            if key in {"Q", "W", "E", "R"}:
+                self.cooldown_errors.append({
+                    "action_index": self.current_action_index,
+                    "ability": key,
+                    "used_at": round(self.time, 3),
+                    "ready_at": round(ready, 3),
+                })
+            else:
+                self.warnings.append(
+                    f"{label} used at t={self.time:.2f}s but its cooldown is not ready "
+                    f"until t={ready:.2f}s (skipped).")
+            return False
         self.cooldowns[key] = self.time + cooldown
+        return True
 
     def _hasted(self, cd, ultimate=False):
         haste = self.haste + (self.ultimate_haste if ultimate else self.basic_haste)
@@ -1367,7 +1379,8 @@ class Simulation:
             self.warnings.append("Q used with no rank — skipped.")
             return None
         cast = KAYLE_AS["windup_percent"] / self.attack_speed()
-        self._check_cd("Q", self._hasted(Q["cooldown"][rank - 1]), "Q")
+        if not self._check_cd("Q", self._hasted(Q["cooldown"][rank - 1]), "Q"):
+            return None
         t = self.time
         self._on_action_damage(t, is_ability=True)   # Cheap Shot checks pre-slow
         self._cast_common(t)
@@ -1399,7 +1412,8 @@ class Simulation:
         if rank == 0:
             self.warnings.append("W used with no rank — skipped.")
             return
-        self._check_cd("W", self._hasted(W["cooldown"][rank - 1]), "W")
+        if not self._check_cd("W", self._hasted(W["cooldown"][rank - 1]), "W"):
+            return
         heal = W["heal"][rank - 1] + W["heal_ap_ratio"] * self.ap
         self._heal(heal, "W — Celestial Blessing", self.time)
         self.w_ms_until = max(self.w_ms_until, self.time + W["ms_duration"])
@@ -1429,7 +1443,8 @@ class Simulation:
         if rank == 0:
             self.warnings.append("E used with no rank — skipped.")
             return
-        self._check_cd("E", self._hasted(E["cooldown"][rank - 1]), "E")
+        if not self._check_cd("E", self._hasted(E["cooldown"][rank - 1]), "E"):
+            return
         t = self.time
         missing_at_cast = max(0.0, self.enemy_max_hp - self.enemy_hp)
         phantom_will_proc = False
@@ -1550,7 +1565,9 @@ class Simulation:
         if rank == 0:
             self.warnings.append("R used with no rank — skipped.")
             return
-        self._check_cd("R", self._hasted(R["cooldown"][rank - 1], ultimate=True), "R")
+        if not self._check_cd(
+                "R", self._hasted(R["cooldown"][rank - 1], ultimate=True), "R"):
+            return
 
         if self.has_experimental_hexplate:
             overdrive = ITEMS["experimental_hexplate"]["overdrive"]
@@ -1616,7 +1633,9 @@ class Simulation:
         act = it.get("active")
         if not act:
             return
-        self._check_cd(f"active:{key}", act["cooldown"], f"{it['name']} active")
+        if not self._check_cd(
+                f"active:{key}", act["cooldown"], f"{it['name']} active"):
+            return
         if act["kind"] == "damage":
             t = self.time
             self._on_action_damage(t, is_item=True)   # item effect: Aery/Electrocute
@@ -1674,7 +1693,8 @@ class Simulation:
         return (elapsed if elapsed > 1e-9 else 1.0), first, last
 
     def run(self):
-        for action in self.combo:
+        for action_index, action in enumerate(self.combo):
+            self.current_action_index = action_index
             kind = action.get("type")
             # Fleet's movement-speed jump is delayed by 0.1 seconds in game.
             # When Fleet is selected, synchronize it automatically before the
@@ -1776,6 +1796,7 @@ class Simulation:
                 "killed": self.enemy_hp <= 0,
             },
             "events": self.events,
+            "cooldown_errors": self.cooldown_errors,
             "warnings": self.warnings,
         }
 

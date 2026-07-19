@@ -611,6 +611,12 @@ select:focus, input:focus {
 .chip .x { margin-left: 2px; color: var(--muted); font-size: 12px; cursor: pointer; }
 .chip .x:hover { color: var(--danger); }
 .chip.drag-over { border-color: var(--gold); background: var(--gold-soft); }
+.combo-track .chip.cooldown-error {
+  border-color: var(--danger);
+  background: rgba(217, 84, 84, .12);
+  box-shadow: 0 0 0 1px rgba(217, 84, 84, .48);
+  color: #ffaaaa;
+}
 .palette-chip { cursor: pointer; }
 
 .results-section { padding-top: 4px; }
@@ -778,6 +784,7 @@ details.breakdown summary {
 }
 .overlay.hidden { display: none; }
 #itemOverlay { align-items: flex-start; }
+#cooldownOverlay { align-items: center; }
 #darkSealStacksField.hidden { display: none; }
 .overlay-box {
   width: min(760px, 96vw);
@@ -787,6 +794,40 @@ details.breakdown summary {
   border-radius: 10px;
   background: var(--surface);
   box-shadow: 0 22px 60px rgba(0, 0, 0, .42);
+}
+.cooldown-box {
+  width: min(390px, 92vw);
+  padding: 28px;
+  overflow: visible;
+  border-color: rgba(217, 84, 84, .52);
+  text-align: center;
+}
+.cooldown-symbol {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border: 1px solid rgba(217, 84, 84, .7);
+  border-radius: 50%;
+  background: rgba(217, 84, 84, .12);
+  color: #ffaaaa;
+  font-size: 22px;
+  font-weight: 750;
+}
+.cooldown-box h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+.cooldown-messages {
+  color: #ffaaaa;
+  font-size: 13px;
+  font-weight: 650;
+}
+.cooldown-messages p { margin: 5px 0; }
+.cooldown-confirm {
+  min-width: 92px;
+  margin-top: 20px;
 }
 .overlay-head {
   position: sticky;

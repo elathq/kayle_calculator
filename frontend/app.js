@@ -12,6 +12,7 @@ let SHARDS = [];                // shard slots from backend
 let RUNE_BY_ID = {};
 let PATH_BY_ID = {};
 let buildSeq = 0;
+const cooldownErrorIndexes = new Set();
 
 const MAX_BUILDS = 8;
 const MAX_COMBO_ACTIONS = 100;
@@ -122,7 +123,11 @@ async function init() {
   );
   $("enemyPreset").addEventListener("change", onPresetChange);
   $("addBuildBtn").addEventListener("click", () => { addBuild(); });
-  $("clearComboBtn").addEventListener("click", () => { state.combo = []; renderCombo(); });
+  $("clearComboBtn").addEventListener("click", () => {
+    state.combo = [];
+    cooldownErrorIndexes.clear();
+    renderCombo();
+  });
   $("simulateBtn").addEventListener("click", simulate);
   $("closeOverlayBtn").addEventListener("click", closeOverlay);
   $("clearSlotBtn").addEventListener("click", () => { setSlot(null); });
@@ -140,8 +145,16 @@ async function init() {
   $("runeOverlay").addEventListener("click", (e) => {
     if (e.target === $("runeOverlay")) closeRuneEditor();
   });
+  $("closeCooldownBtn").addEventListener("click", closeCooldownDialog);
+  $("cooldownOverlay").addEventListener("click", (e) => {
+    if (e.target === $("cooldownOverlay")) closeCooldownDialog();
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (!$("cooldownOverlay").classList.contains("hidden")) {
+      closeCooldownDialog();
+      return;
+    }
     if (!$("itemOverlay").classList.contains("hidden")) closeOverlay();
     if (!$("runeOverlay").classList.contains("hidden")) closeRuneEditor();
   });
@@ -776,6 +789,11 @@ function renderCombo() {
   state.combo.forEach((action, idx) => {
     const chip = document.createElement("span");
     chip.className = `chip ${chipClass(action)}`;
+    if (cooldownErrorIndexes.has(idx)) {
+      chip.classList.add("cooldown-error");
+      chip.setAttribute("aria-invalid", "true");
+      chip.title = `${action.type} cooldown not ready`;
+    }
     chip.draggable = true;
     if (action.type === "ITEM_ACTIVE") {
       chip.appendChild(createItemImage(ITEM_BY_KEY[action.item], { lazy: true }));
@@ -787,6 +805,7 @@ function renderCombo() {
     x.addEventListener("click", (e) => {
       e.stopPropagation();
       state.combo.splice(idx, 1);
+      cooldownErrorIndexes.clear();
       renderCombo();
     });
     chip.appendChild(x);
@@ -830,6 +849,7 @@ function renderCombo() {
 function appendComboAction(action) {
   if (state.combo.length >= MAX_COMBO_ACTIONS) return;
   state.combo.push({ ...action });
+  cooldownErrorIndexes.clear();
   renderCombo();
 }
 
@@ -861,13 +881,32 @@ function handleDrop(e, targetIdx) {
     if (data.index < targetIdx) targetIdx -= 1;
     state.combo.splice(targetIdx, 0, moved);
   }
+  cooldownErrorIndexes.clear();
   renderCombo();
 }
 
 /* ================= simulate & results ================= */
 
+function showCooldownDialog(abilities) {
+  const messages = $("cooldownMessages");
+  messages.replaceChildren(...abilities.map((ability) => {
+    const message = document.createElement("p");
+    message.textContent = `${ability} cooldown not ready`;
+    return message;
+  }));
+  $("cooldownOverlay").classList.remove("hidden");
+  $("closeCooldownBtn").focus();
+}
+
+function closeCooldownDialog() {
+  $("cooldownOverlay").classList.add("hidden");
+  $("simulateBtn").focus();
+}
+
 async function simulate() {
   const btn = $("simulateBtn");
+  cooldownErrorIndexes.clear();
+  renderCombo();
   btn.disabled = true;
   btn.textContent = "Calculating…";
   try {
@@ -915,6 +954,28 @@ async function simulate() {
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    const cooldownErrors = data.results.flatMap((result) =>
+      (result.cooldown_errors || []).map((error) => ({
+        ...error,
+        buildName: result.build_name,
+      })),
+    );
+    if (cooldownErrors.length) {
+      cooldownErrors.forEach((error) => {
+        if (Number.isInteger(error.action_index)) {
+          cooldownErrorIndexes.add(error.action_index);
+        }
+      });
+      renderCombo();
+      $("resultsContainer").replaceChildren();
+      const abilities = [...new Set(cooldownErrors.map((error) => error.ability))];
+      showCooldownDialog(abilities);
+      document.querySelector("#comboTrack .cooldown-error")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      return;
+    }
     renderResults(data.results);
   } catch (err) {
     const results = $("resultsContainer");

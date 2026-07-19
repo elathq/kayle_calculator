@@ -10,6 +10,8 @@ snapshots, and deliberate assumptions. Practice Tool evidence belongs in
 Every build receives the same champion setup, target, scenario, and action
 sequence. The engine returns damage by type, total damage, DPS, burst, healing,
 kill time, remaining target HP, final stats, the event timeline, and warnings.
+Cooldown conflicts are also returned as structured errors with the ability,
+combo index, attempted-use time, and ready time.
 
 ```text
 damage window = last damage timestamp - first damage timestamp
@@ -28,8 +30,9 @@ and recovery time after the final hit are excluded. Delayed damage extends the
 ending timestamp. The API also returns `timeline_duration` for auditing the
 complete action and recovery timeline separately.
 
-The entered sequence always executes. Cooldown conflicts produce warnings so
-the calculator can still isolate intentionally invalid sequences.
+The engine evaluates the entered sequence and records invalid Q/W/E/R casts in
+`cooldown_errors`. The UI blocks the result, shows an ability-readiness popup,
+and outlines every invalid sequence action in red.
 
 ## Precision and damage pipeline
 
@@ -652,8 +655,8 @@ Tenacity       = visual only
 ```
 
 Scenario inputs cover game time, Kayle HP, rune stacks, item stacks, Energized
-readiness, and river state. Haste changes cooldown warnings, not the fixed
-sequence execution.
+readiness, and river state. Haste changes cooldown validation and therefore
+whether the entered sequence is accepted.
 
 ## Assumptions and exclusions
 
@@ -665,7 +668,8 @@ Deliberate normalizations:
 - Approach Velocity assumes movement toward the combo target.
 - Random crit and crit-based cooldown reduction use expected values.
 - Fleet's delayed movement update synchronizes before the next action.
-- Cooldown-invalid actions execute and produce warnings.
+- Cooldown-invalid Q/W/E/R actions are skipped by the engine and rejected by
+  the UI with structured action-index feedback.
 
 Not modeled:
 

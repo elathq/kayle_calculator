@@ -539,6 +539,7 @@ Content-Type: application/json
       "healing": 0,
       "enemy": {},
       "events": [],
+      "cooldown_errors": [],
       "warnings": []
     }
   ]
@@ -549,6 +550,9 @@ One result is returned for every submitted build. `events` contains the
 auditable damage timeline, including non-damage notes such as the R cast and
 its scheduled impact time. `duration` is the Practice Tool damage window;
 `timeline_duration` includes later queued effects such as Divine Judgment.
+`cooldown_errors` identifies invalid Q/W/E/R casts with `action_index`,
+`ability`, `used_at`, and `ready_at`. The browser UI uses these entries to
+block invalid results and highlight the corresponding combo actions.
 The damage, DPS, and burst formulas are in the
 [README](../README.md#core-calculations).
 

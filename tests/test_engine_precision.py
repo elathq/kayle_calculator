@@ -34,6 +34,44 @@ def simulate(combo, **option_overrides):
 
 
 class EnginePrecisionTests(unittest.TestCase):
+    def test_repeated_abilities_report_the_invalid_combo_action(self):
+        ranks = live_default_ability_ranks(18)
+        for ability in ("Q", "W", "E", "R"):
+            with self.subTest(ability=ability):
+                result = simulate_build(
+                    level=18,
+                    ranks=ranks,
+                    item_keys=[],
+                    enemy=ENEMY,
+                    combo=[{"type": ability}, {"type": ability}],
+                    options={},
+                )
+                self.assertEqual(len(result["cooldown_errors"]), 1)
+                error = result["cooldown_errors"][0]
+                self.assertEqual(error["action_index"], 1)
+                self.assertEqual(error["ability"], ability)
+                self.assertLess(error["used_at"], error["ready_at"])
+
+    def test_invalid_e_reset_identifies_the_second_e_in_the_sequence(self):
+        result = simulate_build(
+            level=14,
+            ranks=live_default_ability_ranks(14),
+            item_keys=["nashors_tooth"],
+            enemy=ENEMY,
+            combo=[
+                {"type": "AA"},
+                {"type": "E"},
+                {"type": "AA"},
+                {"type": "E"},
+            ],
+            options={},
+        )
+        self.assertEqual(
+            [(error["action_index"], error["ability"])
+             for error in result["cooldown_errors"]],
+            [(3, "E")],
+        )
+
     def test_single_attack_preserves_fractional_damage(self):
         result = simulate([{"type": "AA"}])
         self.assertEqual(result["calculation_model"], "full_precision_v1")
