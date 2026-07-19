@@ -12,7 +12,7 @@ or not modeled.
 
 Use the hosted application:
 
-**[kayle-calculator.onrender.com](https://kayle-calculator.onrender.com/)**
+**[kayle-calculator.web.app](https://kayle-calculator.web.app/)**
 
 No local installation is required. This repository exists for documentation,
 code transparency, and review of the simulator's formulas and evidence.

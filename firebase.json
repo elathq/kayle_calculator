@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "target": "kayle",
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "kayle-calculator",
+          "region": "europe-west1"
+        }
+      }
+    ]
+  }
+}

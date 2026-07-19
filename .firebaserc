@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "project-3da7cc4e-f4e3-4689-8f8"
+  },
+  "targets": {
+    "project-3da7cc4e-f4e3-4689-8f8": {
+      "hosting": {
+        "kayle": [
+          "kayle-calculator"
+        ]
+      }
+    }
+  }
+}
