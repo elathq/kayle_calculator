@@ -113,6 +113,7 @@ baseline fixture is
 | Kraken Slayer | [Kraken Slayer](https://wiki.leagueoflegends.com/en-us/Kraken_Slayer) |
 | Terminus | [Terminus](https://wiki.leagueoflegends.com/en-us/Terminus) |
 | Infinity Edge | [Infinity Edge](https://wiki.leagueoflegends.com/en-us/Infinity_Edge) |
+| Bloodthirster | [Bloodthirster](https://wiki.leagueoflegends.com/en-us/Bloodthirster) |
 | Bloodletter's Curse | [Bloodletter's Curse](https://wiki.leagueoflegends.com/en-us/Bloodletter%27s_Curse) |
 | Hexoptics C44 | [Hexoptics C44](https://wiki.leagueoflegends.com/en-us/Hexoptics_C44) |
 | Phantom Dancer | [Phantom Dancer](https://wiki.leagueoflegends.com/en-us/Phantom_Dancer) |
@@ -122,6 +123,7 @@ baseline fixture is
 | Yun Tal Wildarrows | [Yun Tal Wildarrows](https://wiki.leagueoflegends.com/en-us/Yun_Tal_Wildarrows) |
 | Navori Flickerblade | [Navori Flickerblade](https://wiki.leagueoflegends.com/en-us/Navori_Flickerblade) |
 | Lord Dominik's Regards | [Lord Dominik's Regards](https://wiki.leagueoflegends.com/en-us/Lord_Dominik%27s_Regards) |
+| Mortal Reminder | [Mortal Reminder](https://wiki.leagueoflegends.com/en-us/Mortal_Reminder) |
 | Wit's End | [Wit's End](https://wiki.leagueoflegends.com/en-us/Wit%27s_End) |
 | Statikk Shiv | [Statikk Shiv](https://wiki.leagueoflegends.com/en-us/Statikk_Shiv) |
 | Stormrazor | [Stormrazor](https://wiki.leagueoflegends.com/en-us/Stormrazor) |
@@ -131,10 +133,11 @@ baseline fixture is
 
 On 2026-07-26, the direct Wiki pages above were checked against the live
 [patch 26.14](https://wiki.leagueoflegends.com/en-us/V26.14) rules. The
-19-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
-Rageblade, Kraken Slayer, Terminus, Infinity Edge, Hexoptics C44, Phantom
+21-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
+Rageblade, Kraken Slayer, Terminus, Infinity Edge, Bloodthirster, Hexoptics C44, Phantom
 Dancer, Rapid Firecannon, Experimental Hexplate, Essence Reaver, Yun Tal
-Wildarrows, Navori Flickerblade, Lord Dominik's Regards, Wit's End, Statikk
+Wildarrows, Navori Flickerblade, Lord Dominik's Regards, Mortal Reminder,
+Wit's End, Statikk
 Shiv, Stormrazor, Fiendhunter Bolts, and Hextech Gunblade. The starter items
 remain in the Starter picker tab, and the hybrid Gunblade remains in the AP
 tab according to the selected picker policy.

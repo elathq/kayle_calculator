@@ -385,6 +385,7 @@ Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
 Magical Footwear      = +10 flat MS to equipped Boots
 
 Gunmetal life-steal rate = 5%
+Bloodthirster life-steal rate = 15%
 life-steal healing = life-steal rate * post-mitigation eligible damage
 ```
 
@@ -393,6 +394,13 @@ which reduces combo duration and raises DPS without changing the number of
 configured attacks. Swifties do not grant attack speed, damage, or Swiftmarch
 adaptive force. Incoming slows are outside the current simulation, so their
 slow resistance is displayed but does not alter the timeline.
+
+Bloodthirster's life steal contributes to reported healing. Ichorshield is not
+created because the simulator has no own-current-HP or own-shield state from
+which to determine excess healing. Mortal Reminder contributes its 30% armor
+penetration and belongs to the Fatality family. Its Grievous Wounds debuff is
+display-only because the target does not perform healing actions in this
+single-target damage model.
 
 ### Spellblade and on-hit items
 

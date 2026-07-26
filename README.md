@@ -173,7 +173,7 @@ Documentation snapshot:
 review date                    = 2026-07-26
 local Riot asset set           = Data Dragon 16.14.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 111 passing
+automated tests                = 115 passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -229,7 +229,7 @@ requests so engine, documentation, and frontend changes are reviewed together.
 Catalog snapshot:
 
 ```text
-selectable items = 42
+selectable items = 44
 ```
 
 ## Public-hosting safeguards

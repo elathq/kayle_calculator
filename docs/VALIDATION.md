@@ -22,7 +22,7 @@ documentation review       = 2026-07-26
 fixture asset version      = Data Dragon 16.14.1
 live Wiki rules patch      = 26.14
 original capture patch     = confirmation pending
-automated suite            = 111 passing tests
+automated suite            = 115 passing tests
 ```
 
 | Area | Status |
@@ -849,9 +849,11 @@ source-confirmed examples:
   Cosmic Drive
   Stormsurge
   Infinity Edge
+  Bloodthirster
   Hexoptics C44
   Phantom Dancer
   Lord Dominik's Regards
+  Mortal Reminder
   Wit's End
   Fiendhunter Bolts
   Yun Tal Wildarrows
@@ -861,7 +863,7 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 111 passing
+maintained automated tests = 115 passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,

@@ -425,6 +425,18 @@ ITEMS = {
             "75 attack damage, 25% critical strike chance, and 30% critical "
             "strike damage. Random crits use expected damage in the simulator."),
     },
+    "bloodthirster": {
+        "id": 3072,
+        "name": "Bloodthirster",
+        "cost": 3400,
+        "stats": {"ad": 80, "life_steal": 0.15},
+        "tags": [],
+        "passive_text": (
+            "80 attack damage and 15% life steal. Ichorshield converts excess "
+            "life-steal healing into a 165-345 (based on level) shield. Life-"
+            "steal healing is reported, but the excess-healing shield is "
+            "outside this outgoing-damage model."),
+    },
     "bloodletters_curse": {
         "id": 8010,
         "name": "Bloodletter's Curse",
@@ -569,6 +581,17 @@ ITEMS = {
             "Giant Slayer: deal 1% increased damage per 100 target bonus HP, "
             "up to 15% at 1500. Limited to 1 Fatality item."),
         "giant_slayer": {"amp_per_bonus_hp": 0.01 / 100.0, "max_amp": 0.15},
+    },
+    "mortal_reminder": {
+        "id": 3033,
+        "name": "Mortal Reminder",
+        "cost": 3000,
+        "stats": {"ad": 35, "armor_pen_pct": 0.30, "crit_chance": 25},
+        "tags": ["fatality"],
+        "passive_text": (
+            "Grievous Wounds: physical damage to enemy champions reduces "
+            "their healing for 3 seconds. Target healing is outside this "
+            "single-target damage model. Limited to 1 Fatality item."),
     },
     "wits_end": {
         "id": 3091,

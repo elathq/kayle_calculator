@@ -13,6 +13,7 @@ NEW_ITEMS = {
     "kraken_slayer": 6672,
     "terminus": 3302,
     "infinity_edge": 3031,
+    "bloodthirster": 3072,
     "bloodletters_curse": 8010,
     "hexoptics_c44": 2523,
     "phantom_dancer": 3046,
@@ -22,6 +23,7 @@ NEW_ITEMS = {
     "yun_tal_wildarrows": 3032,
     "navori_flickerblade": 6675,
     "lord_dominiks_regards": 3036,
+    "mortal_reminder": 3033,
     "wits_end": 3091,
     "statikk_shiv": 3087,
     "stormrazor": 3097,
@@ -89,6 +91,12 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(ITEMS["navori_flickerblade"]["stats"], {
             "attack_speed": 40, "crit_chance": 25, "move_speed_pct": 4,
         })
+        self.assertEqual(ITEMS["bloodthirster"]["stats"], {
+            "ad": 80, "life_steal": 0.15,
+        })
+        self.assertEqual(ITEMS["mortal_reminder"]["stats"], {
+            "ad": 35, "armor_pen_pct": 0.30, "crit_chance": 25,
+        })
         self.assertEqual(ITEMS["stormsurge"]["stats"], {
             "ap": 90, "magic_pen_flat": 15, "move_speed_pct": 6,
         })
@@ -97,6 +105,12 @@ class AddedItemTests(unittest.TestCase):
             Simulation(
                 18, default_ability_ranks(18),
                 ["terminus", "lord_dominiks_regards"],
+                {"hp": 5000, "armor": 100, "mr": 100}, [], {},
+            )
+        with self.assertRaisesRegex(ItemBuildValidationError, "Fatality"):
+            Simulation(
+                18, default_ability_ranks(18),
+                ["mortal_reminder", "lord_dominiks_regards"],
                 {"hp": 5000, "armor": 100, "mr": 100}, [], {},
             )
         with self.assertRaisesRegex(ItemBuildValidationError, "Blight"):
@@ -125,6 +139,42 @@ class AddedItemTests(unittest.TestCase):
         self.assertAlmostEqual(event["raw"], total_ad * expected_multiplier, places=3)
         self.assertEqual(result["stats"]["crit_chance"], 25.0)
         self.assertEqual(result["stats"]["crit_damage"], 230.0)
+
+    def test_bloodthirster_applies_ad_and_life_steal(self):
+        level = 1
+        result = run(
+            ["bloodthirster"], [{"type": "AA"}], level=level,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={"hp": 5000, "armor": 0, "mr": 0},
+        )
+        attack = next(
+            event for event in result["events"]
+            if event["type"] == "physical"
+        )
+        expected_attack = kayle_stats_at(level)["base_ad"] + 80
+        self.assertAlmostEqual(attack["raw"], expected_attack, places=3)
+        self.assertEqual(result["stats"]["life_steal"], 15.0)
+        self.assertEqual(result["healing"], round(attack["dealt"] * 0.15, 1))
+
+    def test_mortal_reminder_applies_expected_crit_and_armor_penetration(self):
+        level = 1
+        result = run(
+            ["mortal_reminder"], [{"type": "AA"}], level=level,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={"hp": 5000, "armor": 100, "mr": 0},
+        )
+        attack = next(
+            event for event in result["events"]
+            if event["type"] == "physical"
+        )
+        expected_raw = (
+            (kayle_stats_at(level)["base_ad"] + 35)
+            * (1 + 0.25 * (KAYLE_AS["crit_damage"] - 1))
+        )
+        self.assertAlmostEqual(attack["raw"], expected_raw, places=3)
+        self.assertEqual(attack["effective_resistance"], 70.0)
+        self.assertEqual(result["stats"]["armor_pen_pct"], 30.0)
+        self.assertEqual(result["stats"]["crit_chance"], 25.0)
 
     def test_hexoptics_uses_current_50_unit_scaling_and_500_unit_cap(self):
         magnification = ITEMS["hexoptics_c44"]["magnification"]

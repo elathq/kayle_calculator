@@ -53,6 +53,7 @@ Use the value from the `key` column inside `builds[].items`.
 | `kraken_slayer` | Kraken Slayer | — |
 | `terminus` | Terminus | — |
 | `infinity_edge` | Infinity Edge | — |
+| `bloodthirster` | Bloodthirster | — |
 | `bloodletters_curse` | Bloodletter's Curse | — |
 | `hexoptics_c44` | Hexoptics C44 | — |
 | `phantom_dancer` | Phantom Dancer | — |
@@ -62,6 +63,7 @@ Use the value from the `key` column inside `builds[].items`.
 | `yun_tal_wildarrows` | Yun Tal Wildarrows | — |
 | `navori_flickerblade` | Navori Flickerblade | — |
 | `lord_dominiks_regards` | Lord Dominik's Regards | — |
+| `mortal_reminder` | Mortal Reminder | — |
 | `wits_end` | Wit's End | — |
 | `statikk_shiv` | Statikk Shiv | — |
 | `stormrazor` | Stormrazor | — |
