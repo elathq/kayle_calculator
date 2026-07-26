@@ -1262,7 +1262,9 @@ details.breakdown summary {
   .header-actions { grid-column: 2; grid-row: 1; margin-left: 0; }
   .simulate-btn { min-width: 0; padding: 7px 11px; font-size: 12px; }
   .layout { padding: 16px 12px 48px; }
-  .config-column { display: flex; }
+  /* The tablet grid uses align-items:start. Reset it when this becomes a
+     vertical flex container or panels shrink to their changing content width. */
+  .config-column { display: flex; align-items: stretch; }
   .panel-head { align-items: flex-start; }
   .section-description-row { padding-left: 0; }
   .combo-panel .section-description-row {
