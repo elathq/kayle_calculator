@@ -19,7 +19,7 @@ RUNE_PATHS = [
                 {"id": 8005, "name": "Press the Attack", "dmg": True,
                  "note": "proc damage + damage amp window"},
                 {"id": 8008, "name": "Lethal Tempo", "dmg": True,
-                 "note": "stacking AS, interacts with the 2.5 AS cap"},
+                 "note": "stacking AS, interacts with the 3.0 AS cap"},
                 {"id": 8021, "name": "Fleet Footwork", "dmg": True,
                  "note": "Energized attack grants timed MS; feeds Swiftmarch"},
                 {"id": 8010, "name": "Conqueror", "dmg": True,
@@ -199,10 +199,10 @@ RUNE_MATH = {
     # prevents Kayle from building another three-hit trigger during the combo.
     # 40 at level 1, 160 at level 18, and 174.117647... at level 20.
     8005: {"stacks": 3, "proc_lo": 40, "proc_hi": 160, "amp": 0.08},
-    # Lethal Tempo: on-attack stacks (6s), 6%/4.8% AS (melee/ranged), max 6.
+    # Lethal Tempo: on-attack stacks (6s), 6%/4% AS (melee/ranged), max 6.
     # At max stacks each attack fires a bolt: adaptive, increased per 1% bonus
     # AS by 1% (melee) / 0.8333% (ranged — wiki-documented 1/6-reduction bug).
-    8008: {"max_stacks": 6, "as_melee": 6.0, "as_ranged": 4.8,
+    8008: {"max_stacks": 6, "as_melee": 6.0, "as_ranged": 4.0,
            "bolt_melee": (9, 30), "bolt_ranged": (6, 24),
            "bolt_amp_melee": 0.01, "bolt_amp_ranged": 0.008333},
     # Conqueror: 2 stacks per melee on-attack / 1 ranged / 2 per ability cast

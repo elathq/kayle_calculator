@@ -93,7 +93,7 @@ Attack speed:
 
 ```text
 total AS = 0.625 + 0.667 * bonus AS percentage / 100
-normal cap = 2.50
+normal cap = 3.003 (displayed by Riot as 3.0)
 attack interval = 1 / total AS
 ```
 
@@ -594,7 +594,7 @@ Press the Attack:
 
 Lethal Tempo:
   maximum stacks = 6
-  AS per stack = 6% melee / 4.8% ranged
+  AS per stack = 6% melee / 4% ranged
   bolt base = 9..30 melee / 6..24 ranged
   bonus-AS ratio = 1.0% melee / 0.8333% ranged per 1% bonus AS
 

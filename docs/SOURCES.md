@@ -193,6 +193,9 @@ supplied detailed formulas and trigger classification.
 
 Rune names, slots, IDs, and icon paths are matched against Riot's
 [`runesReforged.json`](https://ddragon.leagueoflegends.com/cdn/16.14.1/data/en_US/runesReforged.json).
+Live client descriptions, including Lethal Tempo's melee/ranged attack-speed
+split, are checked against CommunityDragon's pinned-client
+[`perks.json`](https://raw.communitydragon.org/16.14/plugins/rcp-be-lol-game-data/global/default/v1/perks.json).
 The general reference is the [Rune page](https://wiki.leagueoflegends.com/en-us/Rune).
 
 | Path | Formula sources |

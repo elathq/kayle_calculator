@@ -2,7 +2,7 @@
 
 Executes an ordered combo (list of actions) against an enemy and returns a
 full damage timeline. Respects:
-  - total AS = base_as + as_ratio * sum(bonus AS %) / 100, capped at 2.50
+  - total AS = base_as + as_ratio * sum(bonus AS %) / 100, capped at 3.003
     (Hail of Blades may exceed the cap while its stacks last)
   - attack layering: total AD + fire wave + item on-hits + E passive + spellblade
   - Zeal stacking (6%/stack, Exalted at 5), Rageblade Seething/Phantom Hit
@@ -28,7 +28,7 @@ from .data.runes_data import RUNE_MATH, SHARD_VALUES
 from .damage import effective_resistance, resolve_damage
 from .item_rules import validate_item_build
 
-AS_CAP = 2.5
+AS_CAP = 3.003
 SPELLBLADE_CD = 1.5
 SPELLBLADE_WINDOW = 10.0
 ENERGIZE_MAX_STACKS = 100.0

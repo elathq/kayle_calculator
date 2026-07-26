@@ -802,6 +802,35 @@ DPS                = 153.0
 full action window = 4.341 s (audit field only)
 ```
 
+### Level-6 Lethal Tempo cadence
+
+The live client data specifies 4% attack speed per ranged Lethal Tempo stack.
+An earlier 4.8% value made Kayle's ramping attack cadence too fast.
+
+```text
+setup:
+  Kayle level/ranks = level 6, Q1 W1 E3 R1
+  runes             = Lethal Tempo, Alacrity 0 / 10, full-health Last Stand
+  shards            = attack speed, adaptive force, scaling health
+  target            = 1000 HP / 0 armor / 0 MR
+  item              = Berserker's Greaves
+  sequence          = AA -> E -> AA -> AA -> AA -> AA -> AA -> AA -> AA
+  E AA cancel       = on
+
+zero-stack attack speed = 0.918
+full-stack attack speed = 1.278
+exact damage            = 907.55
+ideal damage window     = 6.069 s
+ideal DPS               = 149.5
+observed dummy total    = 907..908
+observed manual DPS     = 145..146
+```
+
+The exact damage now agrees with the dummy. The simulator's DPS is an ideal
+first-hit-to-last-hit result with each attack issued as soon as its timer is
+ready. Human input and the dummy's display sampling can make a manually
+executed sequence slightly slower without changing its total damage.
+
 ## Source-backed item coverage still awaiting isolation
 
 Automated tests cover the implemented timing, stacking, expected-crit, and

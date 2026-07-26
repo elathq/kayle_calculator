@@ -184,6 +184,61 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         self.assertEqual(six["dps"], 153.0)
         self.assertGreater(six["timeline_duration"], six["duration"])
 
+    def test_level_six_ranged_lethal_tempo_matches_live_client_value(self):
+        enemy = {
+            "hp": 1000, "current_hp": 1000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        options = {
+            "rune_ids": [8008, 9104, 8299],
+            "shards": ["attack_speed", "adaptive", "health_scaling"],
+            "legend_stacks": 0,
+            "kayle_hp_pct": 100,
+            "pre_stacked_zeal": False,
+            "use_e_for_aa_cancel": True,
+        }
+        ranks = {"Q": 1, "W": 1, "E": 3, "R": 1}
+        combo = [
+            {"type": action}
+            for action in ["AA", "E", "AA", "AA", "AA", "AA", "AA", "AA", "AA"]
+        ]
+        simulation = Simulation(
+            6, ranks, ["berserkers_greaves"], enemy, combo, options)
+
+        self.assertEqual(round(simulation.attack_speed(), 3), 0.918)
+        result = simulation.run()
+        lethal_tempo_bolts = [
+            event for event in result["events"]
+            if event["source"] == "Lethal Tempo bolt"
+        ]
+
+        self.assertEqual(result["stats"]["attack_speed_final"], 1.278)
+        self.assertEqual(len(lethal_tempo_bolts), 4)
+        self.assertEqual(result["total_damage"], 907.55)
+        self.assertEqual(result["duration"], 6.069)
+        self.assertEqual(result["dps"], 149.5)
+
+    def test_global_attack_speed_cap_is_three_attacks_per_second(self):
+        simulation = Simulation(
+            18,
+            default_ability_ranks(18),
+            [
+                "phantom_dancer", "nashors_tooth", "wits_end",
+                "fiendhunter_bolts", "kraken_slayer", "navori_flickerblade",
+            ],
+            ENEMY,
+            [],
+            {
+                "rune_ids": [8008, 9104],
+                "shards": ["attack_speed", "adaptive", "health_scaling"],
+                "legend_stacks": 10,
+                "pre_stacked_zeal": True,
+            },
+        )
+        simulation.lt_stacks = 6
+
+        self.assertEqual(simulation.attack_speed(), 3.003)
+
 
     def test_dark_seal_glory_is_configurable_and_capped_at_ten(self):
         empty = Simulation(
