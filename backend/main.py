@@ -6,6 +6,7 @@ Serves the API under /api/* and the static frontend from frontend/.
 import os
 import json
 import gzip
+import ipaddress
 import math
 import mimetypes
 import secrets
@@ -17,7 +18,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from .data.kayle_data import kayle_stats_at, default_ability_ranks
+from .data.kayle_data import (
+    ability_rank_cap,
+    default_ability_ranks,
+    kayle_stats_at,
+)
 from .data.items_data import ITEMS, item_list_for_api
 from .data.enemy_data import ENEMY_PRESETS, enemy_stats
 from .data.runes_data import (
@@ -29,6 +34,11 @@ from .data.runes_data import (
     runes_for_api,
 )
 from .engine import simulate_build
+from .item_rules import (
+    ItemBuildValidationError,
+    item_rules_for_api,
+    validate_item_build,
+)
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 HOST = "0.0.0.0"
@@ -73,6 +83,7 @@ RATE_LIMIT_BUCKETS = {}
 # These catalogs do not change while a deployed process is running. Building
 # them once also makes the initial bootstrap request cheaper on small hosts.
 ITEM_CATALOG = item_list_for_api()
+ITEM_RULES_CATALOG = item_rules_for_api()
 RUNE_CATALOG = runes_for_api()
 ENEMY_PRESET_CATALOG = [
     {"key": key, "name": value["name"], "scaling": value["scaling"]}
@@ -162,13 +173,19 @@ def validate_simulation_payload(payload):
                 raw_ranks.get(ability, 0),
                 f"ability_ranks.{ability}",
                 0,
-                3 if ability == "R" else 5,
+                ability_rank_cap(ability, level),
                 integer=True,
             )
             for ability in ("Q", "W", "E", "R")
         }
+        available_points = min(level, 18)
+        if sum(ranks.values()) > available_points:
+            raise RequestValidationError(
+                f"ability_ranks cannot spend more than {available_points} "
+                f"points at level {level}"
+            )
 
-    raw_enemy = _mapping(payload.get("enemy") or {}, "enemy")
+    raw_enemy = _mapping(payload.get("enemy", {}), "enemy")
     hp = _number(raw_enemy.get("hp", 3500), "enemy.hp", 1, 10_000_000)
     current_hp = _number(
         raw_enemy.get("current_hp", hp), "enemy.current_hp", 0, hp)
@@ -183,7 +200,7 @@ def validate_simulation_payload(payload):
             raw_enemy.get("mr", 100), "enemy.mr", -10_000, 100_000),
     }
 
-    raw_options = _mapping(payload.get("options") or {}, "options")
+    raw_options = _mapping(payload.get("options", {}), "options")
     options = {}
     for boolean_key in (
         "pre_stacked_zeal", "pre_stacked_rageblade",
@@ -206,7 +223,7 @@ def validate_simulation_payload(payload):
 
     builds = []
     for index, raw_build in enumerate(_sequence(
-            payload.get("builds") or [], "builds", MAX_BUILDS)):
+            payload.get("builds", []), "builds", MAX_BUILDS)):
         raw_build = _mapping(raw_build, f"builds[{index}]")
         name = raw_build.get("name", f"Build {index + 1}")
         if not isinstance(name, str):
@@ -217,19 +234,25 @@ def validate_simulation_payload(payload):
 
         item_keys = []
         for item_index, key in enumerate(_sequence(
-                raw_build.get("items") or [],
+                raw_build.get("items", []),
                 f"builds[{index}].items",
                 MAX_ITEMS_PER_BUILD)):
             if not isinstance(key, str) or key not in ITEMS:
                 raise RequestValidationError(
                     f"builds[{index}].items[{item_index}] is not a known item")
             item_keys.append(key)
+        try:
+            item_keys = validate_item_build(level, item_keys)
+        except ItemBuildValidationError as error:
+            raise RequestValidationError(
+                f"builds[{index}].items[{error.item_index}] {error}"
+            ) from None
 
-        raw_runes = _mapping(raw_build.get("runes") or {},
+        raw_runes = _mapping(raw_build.get("runes", {}),
                              f"builds[{index}].runes")
         selected = []
         for rune_index, rune_key in enumerate(_sequence(
-                raw_runes.get("selected") or [],
+                raw_runes.get("selected", []),
                 f"builds[{index}].runes.selected", 6)):
             if not isinstance(rune_key, str) or rune_key not in RUNE_KEYS:
                 raise RequestValidationError(
@@ -238,7 +261,7 @@ def validate_simulation_payload(payload):
 
         shards = []
         for shard_index, shard in enumerate(_sequence(
-                raw_runes.get("shards") or [],
+                raw_runes.get("shards", []),
                 f"builds[{index}].runes.shards", 3)):
             if not isinstance(shard, str) or shard not in SHARD_KEYS:
                 raise RequestValidationError(
@@ -259,7 +282,7 @@ def validate_simulation_payload(payload):
 
     combo = []
     for index, raw_action in enumerate(_sequence(
-            payload.get("combo") or [], "combo", MAX_COMBO_ACTIONS)):
+            payload.get("combo", []), "combo", MAX_COMBO_ACTIONS)):
         raw_action = _mapping(raw_action, f"combo[{index}]")
         kind = raw_action.get("type")
         if kind not in ACTION_TYPES:
@@ -348,7 +371,6 @@ def handle_simulate(payload: dict) -> dict:
             options={**options, "rune_ids": selected_rune_ids, "shards": shards},
         )
         res["build_name"] = build.get("name", "Build")
-        res["items"] = build.get("items", [])
         res["runes"] = build.get("runes")
         # Damage-relevant runes without provided math are not yet applied — say so.
         selected = set(selected_rune_keys)
@@ -487,6 +509,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send_json({
                 "items": ITEM_CATALOG,
+                "item_rules": ITEM_RULES_CATALOG,
                 "runes": RUNE_CATALOG,
                 "enemy_presets": ENEMY_PRESET_CATALOG,
                 "champion": {
@@ -615,10 +638,16 @@ class Handler(BaseHTTPRequestHandler):
         return super().handle_expect_100()
 
     def _client_key(self):
-        forwarded = self.headers.get("X-Forwarded-For", "")
-        if IS_CLOUD_RUN and forwarded:
-            return forwarded.split(",", 1)[0].strip()[:64]
-        return str(self.client_address[0])[:64]
+        # Cloud Run does not document a trustworthy application-visible
+        # end-user IP header. In particular, X-Forwarded-For may contain an
+        # attacker-supplied prefix, so it must not select a rate-limit bucket.
+        # The socket peer is non-header-controlled but may be a Google proxy;
+        # this is intentionally a coarse application-level safety limit.
+        try:
+            peer = ipaddress.ip_address(str(self.client_address[0]))
+        except ValueError:
+            return "peer:unknown"
+        return f"peer:{peer.compressed}"
 
     def log_message(self, fmt, *args):
         # Icon requests otherwise produce most of the logs on hosted builds.

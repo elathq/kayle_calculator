@@ -129,6 +129,15 @@ def default_ability_ranks(level: int) -> dict:
     return ranks
 
 
+def ability_rank_cap(ability: str, level: int) -> int:
+    """Return the highest rank that can legally be assigned at ``level``."""
+    if ability == "R":
+        return sum(level >= unlock_level for unlock_level in (6, 11, 16))
+    if ability not in {"Q", "W", "E"}:
+        raise ValueError(f"unknown ability: {ability!r}")
+    return min(5, (level + 1) // 2)
+
+
 def kayle_stats_at(level: int) -> dict:
     return {
         "level": level,

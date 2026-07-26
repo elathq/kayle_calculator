@@ -69,14 +69,14 @@
       <div class="cfg-block">
         <label class="field-label" for="enemyPreset">Preset</label>
         <select id="enemyPreset" class="wide"></select>
-        <p class="field-note">Base-stat averages. Items are not included.</p>
+        <p class="field-note" id="enemyPresetNote">Base-stat averages. Items are not included.</p>
       </div>
       <div class="enemy-grid target-grid">
-        <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1" max="10000000"></label>
-        <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0" max="10000000"></label>
-        <label class="wide-field"><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0" max="10000000"></label>
-        <label><span>Armor</span><input type="number" id="enemyArmor" value="100" min="-10000" max="100000"></label>
-        <label><span>Magic resist</span><input type="number" id="enemyMr" value="100" min="-10000" max="100000"></label>
+        <label><span>Maximum HP</span><input type="number" id="enemyHp" value="3500" min="1" max="10000000" step="any" required></label>
+        <label><span>Starting HP</span><input type="number" id="enemyCurrentHp" value="3500" min="0" max="3500" step="any" required></label>
+        <label class="wide-field"><span>Bonus HP</span><input type="number" id="enemyBonusHp" value="0" min="0" max="10000000" step="any" required></label>
+        <label><span>Armor</span><input type="number" id="enemyArmor" value="100" min="-10000" max="100000" step="any" required></label>
+        <label><span>Magic resist</span><input type="number" id="enemyMr" value="100" min="-10000" max="100000" step="any" required></label>
       </div>
     </section>
 
@@ -89,12 +89,12 @@
       </summary>
       <div class="advanced-body">
         <div class="enemy-grid">
-          <label><span>Game time (min)</span><input type="number" id="gameTime" value="25" min="0" max="90"></label>
-          <label><span>Kayle HP %</span><input type="number" id="kayleHp" value="100" min="1" max="100"></label>
-          <label><span>Dark Harvest souls</span><input type="number" id="dhSouls" value="0" min="0" max="10000"></label>
-          <label id="darkSealStacksField" class="hidden"><span>Dark Seal Glory</span><input type="number" id="darkSealStacks" value="0" min="0" max="10"></label>
-          <label><span>Legend stacks</span><input type="number" id="legendStacks" value="10" min="0" max="10"></label>
-          <label><span>Relentless stacks</span><input type="number" id="relentlessStacks" value="0" min="0" max="5"></label>
+          <label><span>Game time (min)</span><input type="number" id="gameTime" value="25" min="0" max="90" step="any" required></label>
+          <label><span>Kayle HP %</span><input type="number" id="kayleHp" value="100" min="0" max="100" step="any" required></label>
+          <label><span>Dark Harvest souls</span><input type="number" id="dhSouls" value="0" min="0" max="10000" step="1" required></label>
+          <label id="darkSealStacksField" class="hidden"><span>Dark Seal Glory</span><input type="number" id="darkSealStacks" value="0" min="0" max="10" step="1" required></label>
+          <label><span>Legend stacks</span><input type="number" id="legendStacks" value="10" min="0" max="10" step="1" required></label>
+          <label><span>Relentless stacks</span><input type="number" id="relentlessStacks" value="0" min="0" max="5" step="1" required></label>
         </div>
         <div class="toggle-list">
           <label class="check"><input type="checkbox" id="fleetEnergized" checked><span>Energized effects start ready</span></label>
@@ -154,7 +154,7 @@
       <p class="results-accuracy-note">
         Results are typically more than 99% accurate. Differences of up to 1% may occur because of known in-game inconsistencies, including Kayle damage varying slightly with target distance. These small variances do not represent a different combo execution and do not materially change the damage discrepancy between builds; the simulator will still reliably identify which build has the higher damage output.
       </p>
-      <div id="resultsContainer" class="results-grid">
+      <div id="resultsContainer" class="results-grid" aria-live="polite">
         <div class="empty-state">
           <span class="empty-icon" aria-hidden="true">◇</span>
           <strong>No results yet</strong>
@@ -198,6 +198,7 @@
       <button class="item-tab" type="button" role="tab" data-item-tab="ap">AP</button>
       <button class="item-tab" type="button" role="tab" data-item-tab="ad">AD</button>
     </div>
+    <p class="picker-status" id="itemPickerStatus" aria-live="polite"></p>
     <div class="item-grid" id="itemGrid" role="tabpanel"></div>
   </div>
 </div>

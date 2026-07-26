@@ -18,24 +18,27 @@ remaining gaps. Implemented formulas are not repeated here; see the
 ## Current status
 
 ```text
-documentation review       = 2026-07-18
+documentation review       = 2026-07-26
 fixture asset version      = Data Dragon 16.14.1
+live Wiki rules patch      = 26.14
 original capture patch     = confirmation pending
-automated suite            = 74 passing tests
+automated suite            = 111 passing tests
 ```
 
 | Area | Status |
 |---|---|
 | Precision, attacks, E, PTA, fire wave | Practice Tool-confirmed |
 | Q, resistance order, penetration, Shadowflame crit | Practice Tool-confirmed |
-| Rageblade, Phantom Hit, fast E reset | Practice Tool-confirmed |
+| Rageblade E snapshot and fast-reset ordering | Practice Tool-confirmed |
+| Rageblade durations and Phantom Hit cadence | Patch 26.14 source-confirmed; prior attack-7 capture superseded |
 | R, Gunblade, Lich Bane, Dusk and Dawn | Practice Tool-confirmed |
 | Selected extended-combat and Energized items | Practice Tool-confirmed |
 | Last Stand | Source-confirmed |
 | W, Swiftmarch, boots, starters, progression | Source-confirmed and regression-tested |
 
 The first Practice Tool patch was not recorded. The fixture therefore keeps
-the honest status `patch confirmation pending`.
+the honest status `patch confirmation pending`; this is separate from the
+dated live-Wiki rules audit performed for patch 26.14.
 
 ## Practice Tool protocol
 
@@ -278,6 +281,28 @@ The physical hit leaves the target above the threshold. The non-critical fire
 wave crosses it, then Nashor's and E passive crit immediately. Earlier
 components are not changed retroactively.
 
+### Natural crit and Kayle E component boundary
+
+The 2026-07-26 League Wiki review separates Starfire Spellblade into basic
+attack damage, passive proc damage, and active spell damage. It identifies the
+Aflame attack/explosion and Divine Ascent fire wave as crit-capable, while the
+separate E passive on-hit and active missing-health magic instances have no
+natural crit modifier.
+
+The automated regression compares an otherwise identical level-18 E with 0%
+and 25% crit chance:
+
+```text
+physical basic-attack component = expected-crit scaled
+Divine Ascent fire wave         = expected-crit scaled
+E passive magic on-hit          = unchanged
+E active missing-health magic   = unchanged
+```
+
+Shadowflame remains deliberately separate: its conditional magic/true-damage
+modifier can amplify E passive or active damage below 40% target HP without
+making either component respond to Kayle's ordinary crit chance.
+
 ### Q into E timing policy
 
 ```text
@@ -310,37 +335,37 @@ Without Rageblade, E reads missing HP before its empowered attack.
 
 ### Rageblade and Phantom Hit
 
-Setup began at zero stacks with Nashor's Tooth, Rageblade, and Rabadon's.
+The original unknown-patch capture began at zero stacks with Nashor's Tooth,
+Rageblade, and Rabadon's. It reported the following cadence:
 
 ```text
-4 AA = matched
-5 AA = matched
-6 AA = 1010 total, 2491 HP; no Phantom Hit
-7 AA = 1312 total, 2189 HP; Phantom Hit 98 magic
+historic capture: first Phantom Hit = attack 7
+```
 
+That attack-7 interpretation is superseded and is no longer a current
+regression authority. The live patch 26.14 Wiki defines a 3-second Seething
+duration, a 6-second Phantom Hit count duration, and counts the attack that
+reaches maximum Seething toward the three-hit cadence:
+
+```text
 maximum Seething reached = attack 4
-first Phantom Hit        = attack 7
-continuing cadence       = attacks 7, 10, 13, ...
+first Phantom Hit        = attack 6
+continuing cadence       = attacks 6, 9, 12, ...
 ```
 
 ### Rageblade with E reset
-
-```text
-sequence         execution    total / final HP    finding
-4 AA -> E        immediate    854 / 2646          E is attack five; no Phantom
-6 AA -> E        brief wait   1391 / 2110         snapshot after physical hit
-6 AA -> E        fast reset   1398 / 2103         snapshot after normal on-hits
-attack 7 switch  brief/fast   306 / 313 on B      isolates ordering difference
-9 AA -> E        immediate    2161 / 1340         same fast order at attack ten
-
-exact final case = 2160.51
-separate Phantom component = 98 magic
-```
 
 The UI exposes one E action and a **Use E for AA cancel** condition. Enabled
 uses the fast-reset branch; disabled waits for the preceding AA's complete
 attack interval. This preserves one E formula while allowing both observed
 execution timings to be backtested.
+
+Practice Tool isolated the E missing-health ordering: an ordinary Rageblade E
+reads after its physical hit, while a fast Phantom-triggering E reads after its
+normal on-hit package. The old exact totals used the superseded attack-7
+cadence and are no longer regression targets. From zero stacks on current
+rules, `4 AA -> E` is attack five without Phantom Hit, while `5 AA -> E` makes
+E attack six and the first Phantom Hit.
 
 Level-6 `AA -> E` isolation established that attack windups resolve in whole
 game ticks. Ordinary attack timers stay continuous. The model uses the
@@ -508,9 +533,18 @@ W -> non-crit AA:
   dummy total       = 192
   components        = 26 magic + 20 magic + 145 physical
   extra Spellblade  = 68 displayed physical
+
+live source formula:
+  raw Spellblade = 1.25 * base AD + 0.5 * total crit percentage points
+  25% crit contributes 12.5 flat physical damage
 ```
 
-This confirms the physical Spellblade branch and adaptive shard inclusion.
+The capture confirms the physical Spellblade branch and adaptive shard
+inclusion, but its rounded display does not distinguish the exact crit-scaling
+formula. The patch 26.14 source audit supplies the flat `0..50` term; it is not
+an additional base-AD ratio. The same audit confirms a 10-second priming
+window, refreshed by later eligible casts, and that the proc applies life
+steal.
 
 ### Experimental Hexplate with Swiftmarch
 
@@ -561,7 +595,10 @@ AA -> AA -> E:
 ```
 
 Kraken reads missing HP before the triggering attack and E consumes an on-hit
-stack. Aggregate display differences are not used to round the engine.
+stack. Aggregate display differences are not used to round the engine. The
+patch 26.14 Wiki audit additionally classifies Bring It Down as basic damage,
+so Hexoptics Magnification applies to it, and as life-steal-applying item
+damage.
 
 ### Terminus
 
@@ -580,7 +617,9 @@ simulator before ordering fix = 908.08
 simulator after ordering fix  = 904.15 damage / 2595.85 HP
 ```
 
-The triggering fire wave uses the previous penetration state.
+The triggering fire wave uses the previous penetration state. Terminus'
+30-magic-damage Shadow on-hit also applies life steal when the build has a
+life-steal source.
 
 ### Bloodletter's Curse
 
@@ -653,8 +692,8 @@ adaptive tie result           = 5.4 AD
 exact total AD / AP           = 97.9 / 0
 ```
 
-This confirms the Energized proc and the zero-item-stat adaptive tie. The
-simulator still reports expected crit damage.
+This confirms an Energized proc from the ready-start scenario option and the
+zero-item-stat adaptive tie. The simulator still reports expected crit damage.
 
 ### Statikk Shiv
 
@@ -670,8 +709,11 @@ raw Energized proc = 60 magic
 exact               = 528.46 damage / 2971.54 HP
 ```
 
-The capture confirms one preloaded Energized proc, not the obsolete charge
-model.
+The capture confirms the preloaded proc selected by the ready-start option.
+The live patch 26.14 source audit supplies the shared recharge rules after that
+proc: each basic attack or on-hit-applying ability grants 6 charge, and
+Statikk grants 9 additional charge per eligible action. Movement-generated
+charge remains intentionally outside the model.
 
 ### Stormrazor, Swiftmarch, and Fleet
 
@@ -766,6 +808,13 @@ Automated tests cover the implemented timing, stacking, expected-crit, and
 target-state rules for the remaining catalog. Direct Practice Tool captures
 are still required before relabelling them.
 
+The 2026-07-26 patch 26.14 Wiki audit corrected Hexoptics from the former
+1%-per-60, 600-unit model to 1% per 50 units capped at 500, including its
+basic-damage interaction with Kraken. Wiki effect tags and Notes also establish
+that Rageblade, Kraken, Terminus, and Wit's End on-hit damage, plus Essence
+Reaver's Spellblade, benefit from life steal. These remain source-confirmed
+until isolated in the Practice Tool.
+
 ```text
 source-confirmed examples:
   Cosmic Drive
@@ -783,7 +832,7 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 79 passing
+maintained automated tests = 111 passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,
@@ -799,7 +848,8 @@ python -B -m unittest discover -s tests -v
 
 ## Remaining validation limits
 
-- Record the exact live patch on the next fresh pass.
+- Record the exact patch for the original Practice Tool fixture on the next
+  fresh pass; the separate live-Wiki rules audit is pinned to patch 26.14.
 - Last Stand needs a controlled own-HP isolation.
 - Preserve raw W, starter, and evolved-boots capture sheets.
 - Isolate the remaining source-confirmed item interactions.

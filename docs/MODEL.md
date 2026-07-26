@@ -34,6 +34,13 @@ The engine evaluates the entered sequence and records invalid Q/W/E/R casts in
 `cooldown_errors`. The UI blocks the result, shows an ability-readiness popup,
 and outlines every invalid sequence action in red.
 
+The AA, ability, or item active that reduces the target to zero HP finishes its
+complete synchronous damage package. The engine then stops: later entered
+actions and unresolved delayed effects do not damage or add events to the dead
+target. If a delayed effect kills during an action's recovery or a wait, the
+timeline ends at that effect's timestamp. Delayed effects still resolve after
+the entered sequence when the target remains alive.
+
 ## Precision and damage pipeline
 
 All calculations remain fractional. The UI may shorten displayed values, but
@@ -362,8 +369,8 @@ live in `backend/data/items_data.py` and their external references are in
 
 ### Shop families and boots
 
-Only one item from each exclusive family is applied. Extra conflicting items
-are ignored with a warning.
+Only one item from each exclusive family is legal. Duplicate and conflicting
+items are rejected before the simulation runs.
 
 ```text
 exclusive families = Boots, Starter, Spellblade, Blight, Fatality
@@ -377,7 +384,8 @@ Spellslinger's Shoes  = 45 flat MS + 18 flat and 8% magic penetration
 Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
 Magical Footwear      = +10 flat MS to equipped Boots
 
-Gunmetal life-steal healing = 0.05 * post-mitigation basic physical damage
+Gunmetal life-steal rate = 5%
+life-steal healing = life-steal rate * post-mitigation eligible damage
 ```
 
 Attack speed from Berserker's and Gunmetal shortens basic-attack intervals,
@@ -390,6 +398,7 @@ slow resistance is displayed but does not alter the timeline.
 
 ```text
 shared Spellblade cooldown = 1.5 s
+shared Spellblade priming window = 10 s
 
 Dusk and Dawn raw magic = 0.75 * base AD + 0.10 * AP
 Dusk and Dawn heal      = 0.10 * AP + 0.03 * bonus HP
@@ -400,22 +409,39 @@ Lich Bane primed AS = +50%
 
 Essence Reaver raw physical
   = 1.25 * base AD
-  + 0.005 * base AD * total crit percentage points
+  + 0.5 * total crit percentage points
+Essence Reaver flat crit term = 0..50 at 0%..100% total crit
 
 Nashor's Tooth raw magic = 15 + 0.15 * AP
 Wit's End raw magic      = 45
 Rageblade raw magic      = 30
 ```
 
+An eligible ability cast primes Spellblade for 10 seconds. Another eligible
+cast while it is primed refreshes that expiry; an eligible attack consumes the
+proc and starts the shared cooldown.
+
+Life steal always applies to the basic attack's post-mitigation physical
+damage. The current Wiki additionally marks Rageblade's Wrath, Kraken Slayer's
+Bring It Down, Terminus' Shadow, Wit's End's Fray, and Spellblade bonus damage
+from Dusk and Dawn, Lich Bane, and Essence Reaver as life-steal-applying item
+damage. Phantom Hit repeats of eligible on-hit damage apply life steal again.
+
 Rageblade cadence:
 
 ```text
 Seething AS per stack = 8%
 maximum stacks = 4
+Seething duration = 3 s, refreshed by attacks
 Phantom Hit = every 3rd attack while fully primed
-from zero stacks: attacks 7, 10, 13, ...
+Phantom Hit count duration = 6 s
+from zero stacks: attacks 6, 9, 12, ...
 repeat delay = 0.15 s
 ```
+
+The attack that reaches maximum Seething also counts as the first attack
+toward Phantom Hit. This current Wiki behavior supersedes the earlier
+attack-7 interpretation.
 
 ### Extended combat and penetration
 
@@ -447,20 +473,28 @@ duration = 6 s
 LDR outgoing bonus = 1% per 100 target bonus HP
 LDR cap = 15% at 1500 target bonus HP
 
-Hexoptics Magnification = 1% per 60 assumed units
-Hexoptics cap = 10% at 600 units
+Hexoptics Magnification = 1% per 50 assumed units
+Hexoptics cap = 10% at 500 units
 assumed attack range = 175 / 525 / 625 by passive stage
 ```
 
 Kraken reads target HP before the triggering attack frame. Terminus grants a
 Dark stack after the triggering attack completes. Bloodletter is gated by cast
-instance; E passive and fire wave are separate eligible instances.
+instance; E passive and fire wave are separate eligible instances. Hexoptics
+also amplifies Kraken's Bring It Down because the current Wiki classifies that
+proc as basic damage.
 
 ### Energized, movement, and delayed effects
 
-Fleet and Energized items share the scenario's ready state.
+Fleet and Energized items share one charge state. The scenario option starts
+that state ready or empty.
 
 ```text
+shared Energized trigger charge = 100
+ready-start option              = 100 charge when enabled, 0 when disabled
+AA or on-hit-applying ability   = +6 charge
+Statikk Shiv                    = +9 additional charge per eligible action
+
 Statikk Shiv proc       = 60 raw magic
 Stormrazor proc         = 100 raw magic
 Stormrazor MS           = +45% for 1.5 s
@@ -481,6 +515,10 @@ Overdrive duration = 8 s
 Overdrive cooldown = 30 s
 ```
 
+Reaching 100 consumes the shared charge and triggers every equipped eligible
+effect. Distance-travelled charge is intentionally not modeled because the
+scenario has no movement-distance input.
+
 Movement windows recalculate Swiftmarch at each action. Delayed damage remains
 in the result after a short combo ends.
 
@@ -492,6 +530,15 @@ Random critical strikes use expected damage.
 expected crit modifier
   = (1 - crit chance) * 1
   + crit chance * total crit-damage modifier
+
+multiplied Kayle components:
+  basic-attack physical damage
+  Divine Ascent fire-wave magic damage
+
+not multiplied by natural attack crit:
+  Starfire Spellblade passive magic on-hit
+  Starfire Spellblade active missing-health magic damage
+  ordinary item on-hit damage unless the item explicitly says otherwise
 
 Infinity Edge crit-damage bonus = +30 percentage points
 
@@ -510,6 +557,12 @@ Flurry cooldown = 30 s
 Navori remaining Q/W/E cooldown after each attack
   = previous remaining cooldown * 0.85
 ```
+
+The fire wave is a separate crit-capable damage component in League. Using the
+same expected multiplier for each eligible component preserves its expected
+damage without introducing random results. Shadowflame's low-health
+magic/true-damage crit is a separate outgoing modifier and can still amplify
+E passive or active magic damage when its own condition is met.
 
 Fiendhunter's natural-crit branch is weighted by natural crit chance. Yun Tal
 starts trained unless its scenario option requests an untrained start.
@@ -563,7 +616,7 @@ Legend: Alacrity:
 
 Legend: Haste:
   basic-ability haste = 1.5 * configured stacks
-  maximum configured stacks = 15
+  maximum basic-ability haste = 15
 
 Coup de Grace = +8% damage below 40% target HP
 Cut Down      = +8% damage above 60% target HP

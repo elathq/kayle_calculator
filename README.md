@@ -22,6 +22,8 @@ code transparency, and review of the simulator's formulas and evidence.
 - Side-by-side build comparison with independent items, runes, and shards.
 - Item selection grouped into Starter Item, Boots, AP, and AD tabs.
 - A drag-and-drop attack, ability, and item-active sequence.
+- Combo execution stops after the AA, ability, or item active that kills the
+  target; later actions and unresolved delayed effects are omitted.
 - Target HP, bonus HP, armor, and magic-resistance controls.
 - A full timeline with raw, resisted, and applied damage.
 - Stable expected-value critical strikes.
@@ -168,10 +170,10 @@ Evidence labels:
 Documentation snapshot:
 
 ```text
-review date                    = 2026-07-18
+review date                    = 2026-07-26
 local Riot asset set           = Data Dragon 16.14.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 79 passing
+automated tests                = 111 passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -192,6 +194,21 @@ Each fact has one home: the model says what is calculated, validation records
 why it is trusted, sources identify the external reference, and maintenance
 explains how to update it.
 
+## Local verification
+
+The repository has no third-party runtime dependencies. From the project
+directory, run:
+
+```text
+python -m compileall -q backend tests validation tools
+python -B -m unittest discover -s tests -v
+python -B validation/backtest.py
+node --check frontend/app.js
+```
+
+The `Verify` GitHub Actions workflow runs the same checks on pushes and pull
+requests so engine, documentation, and frontend changes are reviewed together.
+
 ## Project structure
 
 | Path | Responsibility |
@@ -202,6 +219,7 @@ explains how to update it.
 | `backend/data/enemy_data.py` | Target presets and scaling. |
 | `backend/damage.py` | Resistance and damage-pipeline helpers. |
 | `backend/engine.py` | Stateful timeline simulation. |
+| `backend/item_rules.py` | Shared item-build legality rules and UI metadata. |
 | `backend/main.py` | HTTP server, API validation, and static files. |
 | `frontend/` | Browser interface and local icons. |
 | `tests/` | Automated regressions. |
@@ -226,7 +244,7 @@ combo actions                  <= 100
 build-name length              <= 60 characters
 one wait action                <= 60 seconds
 request body                   <= 256 KiB
-simulation rate               <= 30 requests / client / minute
+simulation rate               <= 30 requests / network-peer bucket / minute
 concurrent simulations         = 2 by default
 configurable concurrency range = 1..4
 ```
@@ -238,6 +256,11 @@ state, and caches are ignored by Git.
 
 These controls reduce accidental and low-cost abuse. Platform monitoring and
 denial-of-service protection remain the host's responsibility.
+
+The application does not trust forwarding headers to identify clients. On
+Cloud Run, the in-process limiter therefore uses the immediate network peer as
+a coarse safety bucket; production-grade per-user or per-IP enforcement belongs
+at a trusted Google Cloud edge or authenticated API layer.
 
 ## Deployment and assets
 

@@ -4,6 +4,7 @@ from backend.data.enemy_data import ENEMY_PRESETS, enemy_stats
 from backend.data.items_data import item_list_for_api
 from backend.data.kayle_data import default_ability_ranks
 from backend.engine import Simulation
+from backend.item_rules import ItemBuildValidationError
 
 
 ENEMY = {"hp": 3500, "armor": 100, "mr": 100}
@@ -104,14 +105,15 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         # Swiftmarch and Spellslinger's Shoes are mid-lane quest rewards. The
         # top-lane quest is what unlocks levels 19-20, so both states cannot
         # exist in one legal build.
-        top_quest = Simulation(
-            20, default_ability_ranks(20),
-            ["swiftmarch", "spellslingers_shoes", "gunmetal_greaves"],
-            ENEMY, [], {},
-        )
-        self.assertEqual(top_quest.items, [])
-        self.assertTrue(any("mid role quest" in warning
-                            for warning in top_quest.warnings))
+        for key in (
+                "swiftmarch", "spellslingers_shoes", "gunmetal_greaves"):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(
+                        ItemBuildValidationError, "levels 19"):
+                    Simulation(
+                        20, default_ability_ranks(20), [key],
+                        ENEMY, [], {},
+                    )
 
     def test_attack_speed_boots_shorten_combos_but_swifties_do_not_add_damage(self):
         combo = [{"type": "AA"}, {"type": "AA"}, {"type": "AA"}]
@@ -206,14 +208,12 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         self.assertEqual(clamped.ap, 55)
         self.assertEqual(with_rabadon.ap, 240.5)
 
-    def test_only_one_starter_item_is_applied(self):
-        sim = Simulation(
-            18, default_ability_ranks(18),
-            ["dorans_ring", "dorans_bow"], ENEMY, [], {},
-        )
-        self.assertEqual(sim.items, ["dorans_ring"])
-        self.assertTrue(any("Limited to 1 Starter item" in warning
-                            for warning in sim.warnings))
+    def test_only_one_starter_item_is_allowed(self):
+        with self.assertRaisesRegex(ItemBuildValidationError, "Starter"):
+            Simulation(
+                18, default_ability_ranks(18),
+                ["dorans_ring", "dorans_bow"], ENEMY, [], {},
+            )
 
     def test_all_requested_items_are_exposed_to_the_picker(self):
         keys = {item["key"] for item in item_list_for_api()}

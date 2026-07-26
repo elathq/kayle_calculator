@@ -2,6 +2,7 @@ import unittest
 
 from backend.data.kayle_data import default_ability_ranks as live_default_ability_ranks
 from backend.engine import Simulation, simulate_build
+from backend.item_rules import ItemBuildValidationError
 
 
 LEVEL = 12
@@ -34,6 +35,144 @@ def simulate(combo, **option_overrides):
 
 
 class EnginePrecisionTests(unittest.TestCase):
+    def test_combo_stops_after_the_attack_that_kills_the_target(self):
+        result = simulate_build(
+            level=1,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            item_keys=[],
+            enemy={
+                "hp": 500, "current_hp": 1,
+                "armor": 0, "mr": 0,
+            },
+            combo=[{"type": "AA"}] * 3,
+            options={},
+        )
+
+        basic_attacks = [
+            event for event in result["events"]
+            if event["source"] == "Basic attack"
+        ]
+        self.assertEqual(result["attack_count"], 1)
+        self.assertEqual(len(basic_attacks), 1)
+        self.assertEqual(result["kill_time"], 0.0)
+
+    def test_combo_stops_after_a_killing_ability(self):
+        result = simulate_build(
+            level=18,
+            ranks=live_default_ability_ranks(18),
+            item_keys=[],
+            enemy={
+                "hp": 1000, "current_hp": 1,
+                "armor": 0, "mr": 0,
+            },
+            combo=[{"type": "Q"}, {"type": "Q"}],
+            options={},
+        )
+
+        q_hits = [
+            event for event in result["events"]
+            if event["source"].startswith("Q ")
+        ]
+        self.assertEqual(len(q_hits), 1)
+        self.assertEqual(result["cooldown_errors"], [])
+        self.assertEqual(result["attack_count"], 0)
+
+    def test_target_starting_at_zero_hp_executes_no_actions(self):
+        result = simulate_build(
+            level=18,
+            ranks=live_default_ability_ranks(18),
+            item_keys=[],
+            enemy={
+                "hp": 1000, "current_hp": 0,
+                "armor": 0, "mr": 0,
+            },
+            combo=[{"type": "AA"}, {"type": "Q"}],
+            options={},
+        )
+
+        self.assertEqual(result["total_damage"], 0)
+        self.assertEqual(result["attack_count"], 0)
+        self.assertEqual(result["events"], [])
+        self.assertEqual(result["kill_time"], 0.0)
+        self.assertTrue(result["enemy"]["killed"])
+
+    def test_killing_attack_finishes_its_same_frame_damage_package(self):
+        result = simulate_build(
+            level=18,
+            ranks=live_default_ability_ranks(18),
+            item_keys=[],
+            enemy={
+                "hp": 1000, "current_hp": 1,
+                "armor": 0, "mr": 0,
+            },
+            combo=[{"type": "AA"}, {"type": "AA"}],
+            options={},
+        )
+
+        damage_sources = {
+            event["source"] for event in result["events"]
+            if event["type"] in {"physical", "magic", "true"}
+        }
+        self.assertEqual(result["attack_count"], 1)
+        self.assertIn("Basic attack", damage_sources)
+        self.assertIn("Passive fire wave", damage_sources)
+        self.assertIn("E passive on-hit", damage_sources)
+        self.assertTrue(all(
+            event["t"] <= result["kill_time"]
+            for event in result["events"]
+        ))
+
+    def test_delayed_kill_during_wait_stops_before_the_next_action(self):
+        result = simulate_build(
+            level=18,
+            ranks=live_default_ability_ranks(18),
+            item_keys=[],
+            enemy={
+                "hp": 1000, "current_hp": 1,
+                "armor": 0, "mr": 0,
+            },
+            combo=[
+                {"type": "R"},
+                {"type": "WAIT", "duration": 3.0},
+                {"type": "AA"},
+            ],
+            options={},
+        )
+
+        self.assertEqual(result["kill_time"], 2.5)
+        self.assertEqual(result["timeline_duration"], 2.5)
+        self.assertEqual(result["attack_count"], 0)
+        self.assertFalse(any(
+            event["source"].startswith("Wait ")
+            for event in result["events"]
+        ))
+        self.assertTrue(all(
+            event["t"] <= result["kill_time"]
+            for event in result["events"]
+        ))
+
+    def test_killing_action_discards_its_pending_delayed_damage(self):
+        result = simulate_build(
+            level=18,
+            ranks=live_default_ability_ranks(18),
+            item_keys=[],
+            enemy={
+                "hp": 1000, "current_hp": 1,
+                "armor": 0, "mr": 0,
+            },
+            combo=[{"type": "Q"}],
+            options={"rune_ids": [8229]},
+        )
+
+        self.assertFalse(any(
+            event["source"] == "Arcane Comet"
+            for event in result["events"]
+        ))
+        self.assertTrue(all(
+            event["t"] <= result["kill_time"]
+            for event in result["events"]
+        ))
+
     def test_repeated_abilities_report_the_invalid_combo_action(self):
         ranks = live_default_ability_ranks(18)
         for ability in ("Q", "W", "E", "R"):
@@ -299,6 +438,50 @@ class EnginePrecisionTests(unittest.TestCase):
                 [{"type": "AA"}, {"type": "AA"}, {"type": "AA"}], options)
             self.assertEqual(three["total_damage"], values["three_aa"])
 
+    def test_natural_crit_scales_attack_and_wave_but_not_e_magic_procs(self):
+        """Protect the Wiki-defined boundary between E's damage components."""
+        level = 18
+        ranks = {"Q": 0, "W": 0, "E": 5, "R": 0}
+        enemy = {
+            "hp": 5000,
+            "current_hp": 2500,
+            "armor": 0,
+            "mr": 0,
+        }
+        combo = [{"type": "E"}]
+
+        plain = simulate_build(level, ranks, [], enemy, combo, {})
+        crit = simulate_build(
+            level, ranks, ["phantom_dancer"], enemy, combo, {})
+
+        def damage_event(result, source):
+            return next(
+                event for event in result["events"]
+                if event["source"].startswith(source)
+            )
+
+        expected_crit_multiplier = (
+            1.0
+            + crit["stats"]["crit_chance"] / 100.0
+            * (crit["stats"]["crit_damage"] / 100.0 - 1.0)
+        )
+        for source in ("Basic attack (E)", "Passive fire wave"):
+            with self.subTest(source=source):
+                self.assertAlmostEqual(
+                    damage_event(crit, source)["raw"],
+                    damage_event(plain, source)["raw"]
+                    * expected_crit_multiplier,
+                    places=6,
+                )
+
+        for source in ("E passive on-hit", "E active (missing HP)"):
+            with self.subTest(source=source):
+                self.assertAlmostEqual(
+                    damage_event(crit, source)["raw"],
+                    damage_event(plain, source)["raw"],
+                    places=6,
+                )
+
     def test_q_damage_and_post_hit_shred_match_practice_tool(self):
         options = {
             "rune_ids": [8005, 8009, 9104, 8299, 8226, 8234],
@@ -447,7 +630,7 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertEqual(q_event["multiplier"], 1.2)
         self.assertIn("Shadowflame crit", q_event["source"])
 
-    def test_rageblade_first_phantom_hit_is_attack_seven_from_zero_stacks(self):
+    def test_rageblade_first_phantom_hit_is_attack_six_from_zero_stacks(self):
         options = {
             "rune_ids": [8021, 8009, 9104, 8299, 8226, 8234],
             "shards": ["attack_speed", "adaptive", "health_scaling"],
@@ -458,17 +641,16 @@ class EnginePrecisionTests(unittest.TestCase):
         }
         items = ["nashors_tooth", "guinsoos_rageblade", "rabadons_deathcap"]
 
+        five = simulate_build(
+            LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
+            [{"type": "AA"}] * 5, options)
+        self.assertFalse(any("Phantom Hit" in event["source"]
+                             for event in five["events"]))
+
         six = simulate_build(
             LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
             [{"type": "AA"}] * 6, options)
-        self.assertEqual(six["total_damage"], 1009.65)
-        self.assertFalse(any("Phantom Hit" in event["source"]
-                             for event in six["events"]))
-
-        seven = simulate_build(
-            LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
-            [{"type": "AA"}] * 7, options)
-        phantom = [event for event in seven["events"]
+        phantom = [event for event in six["events"]
                    if "Phantom Hit" in event["source"]]
         self.assertEqual(len(phantom), 3)
 
@@ -491,33 +673,35 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertEqual(fifth_e["total_damage"], 854.32)
         self.assertEqual(fifth_e["enemy"]["remaining_hp"], 2645.68)
 
-        # Attack seven triggers Phantom Hit. Waiting preserves the post-physical
+        # Attack six triggers Phantom Hit. Waiting preserves the post-physical
         # read, while the fast reset reads after E's normal on-hit package.
         waited = simulate_build(
             LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
-            [{"type": "AA"}] * 6 + [{"type": "E", "timing": "delayed"}],
+            [{"type": "AA"}] * 5 + [{"type": "E", "timing": "delayed"}],
             options)
         instant = simulate_build(
             LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
-            [{"type": "AA"}] * 6 + [{"type": "E"}], options)
-        self.assertEqual(waited["total_damage"], 1390.59)
-        self.assertEqual(waited["enemy"]["remaining_hp"], 2109.41)
-        self.assertEqual(instant["total_damage"], 1397.88)
-        self.assertEqual(instant["enemy"]["remaining_hp"], 2102.12)
+            [{"type": "AA"}] * 5 + [{"type": "E"}], options)
+        for result in (waited, instant):
+            self.assertEqual(sum(
+                "Phantom Hit" in event["source"]
+                for event in result["events"]
+            ), 3)
 
         waited_e = next(event for event in waited["events"]
                         if event["source"] == "E active (missing HP)")
         instant_e = next(event for event in instant["events"]
                          if event["source"] == "E active (missing HP)")
-        self.assertAlmostEqual(waited_e["dealt"], 78.8793, places=4)
-        self.assertAlmostEqual(instant_e["dealt"], 86.1694, places=4)
+        self.assertGreater(instant_e["dealt"], waited_e["dealt"])
 
         # The same fast-reset ordering repeats on the second Phantom Hit.
-        tenth_instant = simulate_build(
+        ninth_instant = simulate_build(
             LEVEL, default_ability_ranks(LEVEL), items, ENEMY,
-            [{"type": "AA"}] * 9 + [{"type": "E"}], options)
-        self.assertEqual(tenth_instant["total_damage"], 2160.51)
-        self.assertEqual(tenth_instant["enemy"]["remaining_hp"], 1339.49)
+            [{"type": "AA"}] * 8 + [{"type": "E"}], options)
+        self.assertEqual(sum(
+            "Phantom Hit" in event["source"]
+            for event in ninth_instant["events"]
+        ), 6)
 
     def test_last_stand_documented_missing_health_brackets(self):
         base_options = {
@@ -685,12 +869,10 @@ class EnginePrecisionTests(unittest.TestCase):
         self.assertEqual(sorcerers["stats"]["magic_pen_flat"], 12.0)
         self.assertEqual(q["effective_resistance"], 88.0)
 
-        limited = simulate_build(
-            LEVEL, ranks, ["swiftmarch", "sorcerers_shoes"], ENEMY,
-            [], options)
-        self.assertTrue(any("Limited to 1 Boots item" in warning
-                            for warning in limited["warnings"]))
-        self.assertEqual(limited["stats"]["movement_speed"], 400.0)
+        with self.assertRaisesRegex(ItemBuildValidationError, "Boots"):
+            simulate_build(
+                LEVEL, ranks, ["swiftmarch", "sorcerers_shoes"], ENEMY,
+                [], options)
 
     def test_swiftmarch_recalculates_during_two_second_w_buff(self):
         options = {

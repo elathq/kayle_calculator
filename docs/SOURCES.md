@@ -4,9 +4,10 @@ This is the external-source ledger. It records provenance and version pins; it
 does not duplicate the formulas in the [Simulation model](MODEL.md).
 
 ```text
-last review          = 2026-07-18
+last review          = 2026-07-26
 local Riot asset set = Data Dragon 16.14.1
-League Wiki pages    = live and may change after review
+live rules snapshot  = League Wiki patch 26.14
+League Wiki pages    = live and may change after the 2026-07-26 review
 ```
 
 Related records:
@@ -35,6 +36,9 @@ Timing-sensitive exceptions remain documented beside the source formula.
 | Data | Source |
 |---|---|
 | Kayle stats, passive, abilities, ranks, ratios, and timings | [Kayle — League Wiki](https://wiki.leagueoflegends.com/en-us/Kayle) |
+| Starfire Spellblade damage-source and crit boundaries | [Starfire Spellblade data template](https://wiki.leagueoflegends.com/en-us/Template:Data_Kayle/Starfire_Spellblade), [Kayle patch history](https://wiki.leagueoflegends.com/en-us/Kayle/Patch_history) |
+| Divine Ascent fire-wave crit behavior | [Divine Ascent data template](https://wiki.leagueoflegends.com/en-us/Template:Data_Kayle/Divine_Ascent) |
+| General natural-critical-strike rules | [Critical strike](https://wiki.leagueoflegends.com/en-us/Critical_strike) |
 | Per-level growth | [Champion statistic](https://wiki.leagueoflegends.com/en-us/Champion_statistic) |
 | Attack-speed ratio, cap, windup, and timer | [Attack speed](https://wiki.leagueoflegends.com/en-us/Attack_speed), [Attack timer](https://wiki.leagueoflegends.com/en-us/Attack_timer) |
 | Physical mitigation | [Armor](https://wiki.leagueoflegends.com/en-us/Armor) |
@@ -123,6 +127,23 @@ baseline fixture is
 | Stormrazor | [Stormrazor](https://wiki.leagueoflegends.com/en-us/Stormrazor) |
 | Fiendhunter Bolts | [Fiendhunter Bolts](https://wiki.leagueoflegends.com/en-us/Fiendhunter_Bolts) |
 
+### Live AD-item audit
+
+On 2026-07-26, the direct Wiki pages above were checked against the live
+[patch 26.14](https://wiki.leagueoflegends.com/en-us/V26.14) rules. The
+19-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
+Rageblade, Kraken Slayer, Terminus, Infinity Edge, Hexoptics C44, Phantom
+Dancer, Rapid Firecannon, Experimental Hexplate, Essence Reaver, Yun Tal
+Wildarrows, Navori Flickerblade, Lord Dominik's Regards, Wit's End, Statikk
+Shiv, Stormrazor, Fiendhunter Bolts, and Hextech Gunblade. The starter items
+remain in the Starter picker tab, and the hybrid Gunblade remains in the AP
+tab according to the selected picker policy.
+
+The audit used each live item page, its Notes section, and its patch history.
+Those sources distinguish basic-damage and life-steal-applying item tags from
+ordinary proc damage; the resulting formulas and trigger rules are recorded in
+[the simulation model](MODEL.md#item-formulas).
+
 Relevant Riot change records:
 
 - [Patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/)
@@ -153,8 +174,9 @@ value. Non-damage passives may appear in the UI while remaining outside the
 Catalog cross-check snapshot:
 
 ```text
-review date        = 2026-07-17
+review date        = 2026-07-26
 Riot catalog       = Data Dragon 16.14.1
+live Wiki patch    = 26.14
 Bloodletter's Curse ID = 8010
 Stormrazor ID          = 3097
 Rapid Firecannon ID    = 3094

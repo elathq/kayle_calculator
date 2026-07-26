@@ -336,6 +336,21 @@ item keys must come from the Active action column in the item table.
 ```json
 {
   "items": [],
+  "item_rules": {
+    "exclusive_groups": {
+      "spellblade": "Spellblade",
+      "blight": "Blight",
+      "fatality": "Fatality",
+      "boots": "Boots",
+      "starter": "Starter"
+    },
+    "level_limits": {
+      "mid_role_quest": {
+        "max_level": 18,
+        "reason": "mid-role quest rewards cannot be combined with levels 19–20"
+      }
+    }
+  },
   "runes": {
     "paths": [],
     "shards": []
@@ -349,6 +364,10 @@ item keys must come from the Active action column in the item table.
 }
 ```
 
+`item_rules` is frontend guidance generated from the same module used by API
+and engine validation. Clients may disable illegal choices proactively, but
+must still handle an HTTP `400` because the server remains authoritative.
+
 ## Build the POST payload
 
 The payload has six top-level fields:
@@ -361,6 +380,10 @@ The payload has six top-level fields:
 | `builds` | Item and rune setups to compare |
 | `combo` | Ordered actions from the action table |
 | `options` | Shared scenario state |
+
+Ability ranks must respect the normal level gates: basic abilities unlock one
+additional rank every two champion levels, R unlocks at levels 6, 11, and 16,
+and the total assigned points cannot exceed the points available at that level.
 
 ### Enemy structure
 
@@ -410,7 +433,9 @@ Use item, rune-path, rune, and shard keys from the tables above.
 ```
 
 Empty item slots are omitted instead of being sent as `null`. Numeric item and
-rune IDs are rejected.
+rune IDs are rejected. Duplicate items, multiple items from an exclusive Boots,
+Starter, Spellblade, Blight, or Fatality family, and level-incompatible quest
+rewards reject the complete request with HTTP `400`.
 
 ### Options
 
@@ -503,6 +528,9 @@ Content-Type: application/json
 
 ## POST response structure
 
+The response's `items` array matches the validated submitted build. Illegal
+item combinations never reach the simulation engine.
+
 ```json
 {
   "results": [
@@ -552,6 +580,10 @@ One result is returned for every submitted build. `events` contains the
 auditable damage timeline, including non-damage notes such as the R cast and
 its scheduled impact time. `duration` is the Practice Tool damage window;
 `timeline_duration` includes later queued effects such as Divine Judgment.
+When the target dies, the killing action's synchronous damage package
+finishes, then later combo actions and unresolved delayed effects are omitted.
+If delayed damage gets the kill during recovery or a wait, `timeline_duration`
+ends at `kill_time`.
 `cooldown_errors` identifies invalid Q/W/E/R casts with `action_index`,
 `ability`, `used_at`, and `ready_at`. The browser UI uses these entries to
 block invalid results and highlight the corresponding combo actions.

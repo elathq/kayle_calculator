@@ -43,7 +43,8 @@ SUPPORTED_STAT_KEYS = {
 
 # These effect shapes are reusable for newly added items without engine edits.
 GENERIC_EFFECT_FIELDS = {
-    "onhit_magic_flat", "onhit_magic", "spellblade", "active",
+    "onhit_magic_flat", "onhit_magic", "onhit_applies_life_steal",
+    "spellblade", "active",
 }
 
 # These are custom mechanics. Their numbers are still edited in this file. A
@@ -186,12 +187,15 @@ ITEMS = {
         "cost": 3100,
         "stats": {"ap": 60, "ability_haste": 20, "attack_speed": 20, "health": 300},
         "tags": ["spellblade"],
-        "passive_text": ("Spellblade: after an ability, next basic attack within 10s deals "
-                         "75% base AD (+10% AP) bonus magic damage, heals for 10% AP (+3% bonus HP) "
-                         "and immediately applies on-hit effects again (1.5s cooldown)."),
+        "passive_text": (
+            "Spellblade: after an ability, next basic attack within 10s deals "
+            "75% base AD (+10% AP) bonus magic damage that applies life steal, "
+            "heals for 10% AP (+3% bonus HP), and immediately applies on-hit "
+            "effects again (1.5s cooldown)."),
         "spellblade": {
             "base_ad_ratio": 0.75, "ap_ratio": 0.10,
             "heal_ap_ratio": 0.10, "heal_bonus_hp_ratio": 0.03,
+            "applies_life_steal": True,
             "repeats_onhits": True,
         },
     },
@@ -201,11 +205,21 @@ ITEMS = {
         "cost": 3000,
         "stats": {"ad": 30, "ap": 30, "attack_speed": 25},
         "tags": ["rageblade"],
-        "passive_text": ("Wrath: attacks deal 30 bonus magic on-hit. Seething Strike: attacks grant "
-                         "8% bonus AS (stacks 4x). At max stacks every 3rd attack triggers a Phantom Hit "
-                         "that applies on-hit effects again."),
+        "passive_text": (
+            "Wrath: attacks deal 30 bonus magic on-hit and that damage applies "
+            "life steal. Seething Strike: attacks grant 8% bonus AS for 3 "
+            "seconds (stacks 4x). At maximum stacks, attacks build Phantom "
+            "for 6 seconds; at 2 stacks the next attack triggers a delayed "
+            "Phantom Hit that applies on-hit effects again."),
         "onhit_magic_flat": 30.0,
-        "seething": {"as_per_stack": 8.0, "max_stacks": 4},
+        "onhit_applies_life_steal": True,
+        "seething": {
+            "as_per_stack": 8.0,
+            "max_stacks": 4,
+            "duration": 3.0,
+            "phantom_duration": 6.0,
+            "phantom_delay": 0.15,
+        },
     },
     "lich_bane": {
         "id": 3100,
@@ -213,12 +227,14 @@ ITEMS = {
         "cost": 2900,
         "stats": {"ap": 100, "ability_haste": 10, "move_speed_pct": 6},
         "tags": ["spellblade"],
-        "passive_text": ("Spellblade: after an ability, next basic attack within 10s gains 50% bonus "
-                         "attack speed and deals 75% base AD (+45% AP) bonus magic damage on-hit "
-                         "(1.5s cooldown)."),
+        "passive_text": (
+            "Spellblade: after an ability, next basic attack within 10s gains "
+            "50% bonus attack speed and deals 75% base AD (+45% AP) bonus "
+            "magic damage on-hit that applies life steal (1.5s cooldown)."),
         "spellblade": {
             "base_ad_ratio": 0.75, "ap_ratio": 0.45,
             "bonus_as_while_primed": 50.0,
+            "applies_life_steal": True,
             "repeats_onhits": False,
         },
     },
@@ -367,13 +383,16 @@ ITEMS = {
         "tags": ["kraken_slayer"],
         "passive_text": (
             "Bring It Down: every third on-hit application deals 150-200 "
-            "melee / 120-160 ranged physical damage (levels 8-18), increased "
-            "by up to 75% based on target missing HP. Level scaling keeps its "
-            "slope through top-quest levels 19-20."),
+            "melee / 120-160 ranged basic physical damage (levels 8-18), "
+            "increased by up to 75% based on target missing HP; this damage "
+            "applies life steal. Level scaling keeps its slope through "
+            "top-quest levels 19-20."),
         "bring_it_down": {
             "melee_lo": 150.0, "melee_hi": 200.0,
             "ranged_modifier": 0.80, "missing_hp_max_amp": 0.75,
             "stack_duration": 3.0,
+            "basic_damage": True,
+            "applies_life_steal": True,
         },
     },
     "terminus": {
@@ -383,11 +402,14 @@ ITEMS = {
         "stats": {"ad": 30, "attack_speed": 35},
         "tags": ["terminus", "fatality", "blight"],
         "passive_text": (
-            "Shadow: attacks deal 30 magic damage on-hit. Juxtaposition: "
+            "Shadow: attacks deal 30 magic damage on-hit and that damage "
+            "applies life steal. Juxtaposition: "
             "champion hits alternate Light and Dark; Dark grants 10% armor "
             "and magic penetration for 5 seconds, stacking 3 times. Limited "
-            "to 1 Fatality and 1 Blight item."),
+            "to 1 Fatality and 1 Blight item. Light's defensive resistances "
+            "are outside this outgoing-damage model."),
         "onhit_magic_flat": 30.0,
+        "onhit_applies_life_steal": True,
         "juxtaposition": {
             "dark_pen_per_stack": 0.10, "max_stacks": 3,
             "duration": 5.0,
@@ -425,10 +447,13 @@ ITEMS = {
         "stats": {"ad": 55, "crit_chance": 25},
         "tags": ["hexoptics"],
         "passive_text": (
-            "Magnification: attacks deal 1% increased basic damage per 60 units "
-            "to the target, up to 10% at 600. With no distance input, the "
-            "simulator assumes Kayle attacks at her current maximum attack range."),
-        "magnification": {"amp_per_unit": 0.01 / 60.0, "max_amp": 0.10},
+            "Magnification: deal 1% increased basic damage per 50 units to "
+            "the target, up to 10% at 500. With no distance input, the "
+            "simulator assumes Kayle attacks at her current maximum attack "
+            "range. This also amplifies other basic damage such as Kraken "
+            "Slayer's Bring It Down. Arcane Aim's post-takedown range cannot "
+            "affect the tracked target because simulation stops on its death."),
+        "magnification": {"amp_per_unit": 0.01 / 50.0, "max_amp": 0.10},
     },
     "phantom_dancer": {
         "id": 3046,
@@ -447,8 +472,10 @@ ITEMS = {
         "passive_text": (
             "Sharpshooter: a fully Energized attack deals 40 bonus magic "
             "damage on-hit and gains 35% bonus range, capped at +150. The "
-            "Energized-start option controls whether the combo begins ready; "
-            "the extended range is included in Hexoptics Magnification."),
+            "Energized-start option controls whether the combo begins ready. "
+            "Attacks generate shared Energize stacks; movement generation is "
+            "outside this model. The extended range is included in Hexoptics "
+            "Magnification."),
         "sharpshooter": {
             "damage": 40.0, "bonus_range_pct": 0.35,
             "bonus_range_cap": 150.0,
@@ -483,13 +510,15 @@ ITEMS = {
         "tags": ["spellblade"],
         "passive_text": (
             "Spellblade: after an ability, the next attack within 10 seconds "
-            "deals 125% base AD plus 0.5% base AD per 1% total critical strike "
-            "chance as bonus physical damage (1.5-second cooldown). Mana "
-            "restoration is outside this damage model."),
+            "deals 125% base AD plus 0.5 flat damage per 1% total critical "
+            "strike chance as bonus physical damage (1.5-second cooldown). "
+            "The damage applies life steal. Mana restoration is outside this "
+            "damage model."),
         "spellblade": {
             "base_ad_ratio": 1.25,
-            "base_ad_ratio_per_crit_pct": 0.005,
+            "flat_per_crit_pct": 0.5,
             "damage_type": "physical",
+            "applies_life_steal": True,
             "mana_restore_damage_ratio": 0.50,
             "repeats_onhits": False,
         },
@@ -498,7 +527,9 @@ ITEMS = {
         "id": 3032,
         "name": "Yun Tal Wildarrows",
         "cost": 3100,
-        "stats": {"ad": 50, "attack_speed": 40},
+        # The live item deliberately carries innate 0% crit. It contributes a
+        # distinct stat type to Jack of All Trades before training adds crit.
+        "stats": {"ad": 50, "attack_speed": 40, "crit_chance": 0},
         "tags": ["yun_tal"],
         "passive_text": (
             "Practice Makes Lethal: attacks permanently grant 0.4% critical "
@@ -545,8 +576,11 @@ ITEMS = {
         "cost": 2800,
         "stats": {"attack_speed": 50, "mr": 45, "tenacity": 20},
         "tags": [],
-        "passive_text": "Fray: basic attacks deal 45 bonus magic damage on-hit.",
+        "passive_text": (
+            "Fray: basic attacks deal 45 bonus magic damage on-hit and that "
+            "damage applies life steal."),
         "onhit_magic_flat": 45.0,
+        "onhit_applies_life_steal": True,
     },
     "statikk_shiv": {
         "id": 3087,
@@ -556,9 +590,14 @@ ITEMS = {
         "tags": ["statikk_shiv"],
         "passive_text": (
             "Electrospark: an Energized basic attack deals 60 magic damage to "
-            "champions. The scenario's Energized control determines whether "
-            "the combo begins ready."),
-        "electrospark": {"damage": 60.0},
+            "champions and grants 9 extra Energize stacks per attack (15 total "
+            "with the shared base generation). The scenario control determines "
+            "whether the combo begins ready. Secondary-target chains are "
+            "outside this single-target model."),
+        "electrospark": {
+            "damage": 60.0,
+            "bonus_energize_per_attack": 9.0,
+        },
     },
     "stormrazor": {
         "id": 3097,
@@ -568,7 +607,8 @@ ITEMS = {
         "tags": ["stormrazor"],
         "passive_text": (
             "Bolt: a fully Energized attack deals 100 bonus magic damage on-hit "
-            "and grants 45% movement speed for 1.5 seconds."),
+            "and grants 45% movement speed for 1.5 seconds. Attacks generate "
+            "shared Energize stacks; movement generation is outside this model."),
         "bolt": {"damage": 100.0, "move_speed_pct": 45.0, "duration": 1.5},
     },
     "fiendhunter_bolts": {

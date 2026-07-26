@@ -34,7 +34,7 @@ scope belong in the [simulation model](MODEL.md).
 | Passive that does not affect champion damage | No; describe it in `passive_text` |
 | A completely new stacking, trigger, transformation, execute, proc, or timing rule | Yes |
 | A new active kind other than `damage` or `stasis` | Yes |
-| A new mutually exclusive shop family | Yes, once, to register the new family |
+| A new mutually exclusive shop family | No engine edit; register it in `backend/item_rules.py` |
 
 The frontend item picker is automatic. Adding a valid catalog entry makes it
 selectable without editing HTML or JavaScript. Its tab is inferred from the
@@ -136,10 +136,14 @@ produces a readable error instead of silently contributing zero.
     "cost": 3000,
     "stats": {"attack_speed": 40},
     "tags": [],
-    "passive_text": "Attacks deal 45 bonus magic damage on-hit.",
+    "passive_text": "Attacks deal 45 bonus magic damage on-hit that applies life steal.",
     "onhit_magic_flat": 45.0,
+    "onhit_applies_life_steal": True,
 },
 ```
+
+Omit `onhit_applies_life_steal` or set it to `False` unless the current source
+explicitly classifies that item's damage as life-steal applying.
 
 ### Flat plus AP-scaling magic on-hit
 
@@ -172,10 +176,14 @@ in a build.
         "base_ad_ratio": 0.75,
         "ap_ratio": 0.40,
         "damage_type": "magic",
+        "applies_life_steal": True,
         "repeats_onhits": False,
     },
 },
 ```
+
+The same source rule applies to `applies_life_steal`: do not infer it merely
+because the effect is delivered by an attack.
 
 ### Generic damage active
 
@@ -207,6 +215,11 @@ in a build.
 - `mid_role_quest`: activates the mid-role reward and enforces the role-quest
   level restriction.
 - `active`: descriptive; the `active` object makes the button appear.
+
+Exclusive-family labels and level restrictions live in
+`backend/item_rules.py`. The API exports those rules to the item picker, while
+the API validator and engine call the same Python validator. Add a rule there
+instead of duplicating a restriction in the frontend or simulation code.
 
 ```text
 mid-role bonus AD/AP multiplier = 1.08

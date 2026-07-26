@@ -1,0 +1,39 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compile Python sources
+        run: python -m compileall -q backend tests validation tools
+
+      - name: Run automated tests
+        run: python -B -m unittest discover -s tests -v
+
+      - name: Run Practice Tool backtest
+        run: python -B validation/backtest.py
+
+      - name: Check frontend JavaScript syntax
+        run: node --check frontend/app.js

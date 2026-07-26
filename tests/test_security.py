@@ -3,6 +3,7 @@ import json
 import math
 import threading
 import unittest
+from types import SimpleNamespace
 
 from backend.data.runes_data import runes_for_api
 from backend.main import (
@@ -127,6 +128,99 @@ class SecurityValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RequestValidationError, "known item"):
             validate_simulation_payload(payload)
 
+    def test_falsey_values_do_not_bypass_collection_type_validation(self):
+        cases = (
+            (("enemy",), [], "enemy must be an object"),
+            (("options",), [], "options must be an object"),
+            (("builds",), "", "builds must be an array"),
+            (("combo",), {}, "combo must be an array"),
+            (("builds", 0, "items"), {}, r"builds\[0\]\.items must be an array"),
+            (("builds", 0, "runes"), [], r"builds\[0\]\.runes must be an object"),
+            (
+                ("builds", 0, "runes", "selected"),
+                {},
+                r"builds\[0\]\.runes\.selected must be an array",
+            ),
+            (
+                ("builds", 0, "runes", "shards"),
+                {},
+                r"builds\[0\]\.runes\.shards must be an array",
+            ),
+        )
+        for path, invalid, message in cases:
+            with self.subTest(path=path):
+                payload = minimal_payload()
+                target = payload
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = invalid
+                with self.assertRaisesRegex(RequestValidationError, message):
+                    validate_simulation_payload(payload)
+
+    def test_ability_ranks_respect_level_caps_and_available_points(self):
+        payload = minimal_payload()
+        payload["level"] = 1
+        payload["ability_ranks"] = {"Q": 1, "W": 1, "E": 0, "R": 0}
+        with self.assertRaisesRegex(RequestValidationError, "more than 1 points"):
+            validate_simulation_payload(payload)
+
+        payload["ability_ranks"] = {"Q": 0, "W": 0, "E": 0, "R": 1}
+        with self.assertRaisesRegex(RequestValidationError, "between 0 and 0"):
+            validate_simulation_payload(payload)
+
+        payload["ability_ranks"] = {"Q": 1, "W": 0, "E": 0, "R": 0}
+        validated = validate_simulation_payload(payload)
+        self.assertEqual(validated["ability_ranks"], payload["ability_ranks"])
+
+    def test_illegal_item_combinations_are_rejected(self):
+        cases = (
+            (["nashors_tooth", "nashors_tooth"], "duplicates"),
+            (["boots", "berserkers_greaves"], "Boots"),
+            (["lich_bane", "essence_reaver"], "Spellblade"),
+            (["dorans_ring", "dark_seal"], "Starter"),
+            (["void_staff", "cryptbloom"], "Blight"),
+            (["terminus", "lord_dominiks_regards"], "Fatality"),
+            (["bloodletters_curse", "terminus"], "Blight"),
+            (["lord_dominiks_regards", "terminus"], "Fatality"),
+        )
+        for items, message in cases:
+            with self.subTest(items=items):
+                payload = minimal_payload()
+                payload["builds"][0]["items"] = items
+                with self.assertRaisesRegex(RequestValidationError, message):
+                    validate_simulation_payload(payload)
+
+    def test_legal_item_boundaries_are_preserved(self):
+        payload = minimal_payload()
+        payload["builds"][0]["items"] = [
+            "lord_dominiks_regards",
+            "bloodletters_curse",
+            "nashors_tooth",
+            "rabadons_deathcap",
+            "berserkers_greaves",
+            "yun_tal_wildarrows",
+        ]
+        validated = validate_simulation_payload(payload)
+        self.assertEqual(
+            validated["builds"][0]["items"],
+            payload["builds"][0]["items"],
+        )
+
+        for key in (
+                "gunmetal_greaves", "swiftmarch", "spellslingers_shoes"):
+            with self.subTest(key=key, level=18):
+                payload = minimal_payload()
+                payload["builds"][0]["items"] = [key]
+                validate_simulation_payload(payload)
+            for level in (19, 20):
+                with self.subTest(key=key, level=level):
+                    payload = minimal_payload()
+                    payload["level"] = level
+                    payload["builds"][0]["items"] = [key]
+                    with self.assertRaisesRegex(
+                            RequestValidationError, "levels 19"):
+                        validate_simulation_payload(payload)
+
     def test_rate_limiter_has_a_bounded_public_budget(self):
         key = "security-test-client"
         with RATE_LIMIT_LOCK:
@@ -136,6 +230,19 @@ class SecurityValidationTests(unittest.TestCase):
         self.assertGreater(_rate_limit(key, now=1.0), 0)
         with RATE_LIMIT_LOCK:
             RATE_LIMIT_BUCKETS.pop(key, None)
+
+    def test_client_key_ignores_spoofable_forwarding_headers(self):
+        request = SimpleNamespace(
+            headers={"X-Forwarded-For": "198.51.100.10, 192.0.2.2"},
+            client_address=("2001:0db8:0:0:0:0:0:1", 12345),
+        )
+        first = Handler._client_key(request)
+        request.headers["X-Forwarded-For"] = "203.0.113.99"
+        self.assertEqual(Handler._client_key(request), first)
+        self.assertEqual(first, "peer:2001:db8::1")
+
+        request.client_address = ("not-an-ip-address", 12345)
+        self.assertEqual(Handler._client_key(request), "peer:unknown")
 
 
 class SecurityHTTPTests(unittest.TestCase):
@@ -207,6 +314,21 @@ class SecurityHTTPTests(unittest.TestCase):
         body = json.loads(response.read())
         self.assertEqual(response.status, 200)
         self.assertEqual(len(body["results"]), 1)
+        connection.close()
+
+    def test_illegal_item_build_returns_bad_request(self):
+        payload = minimal_payload()
+        payload["builds"][0]["items"] = ["lich_bane", "essence_reaver"]
+        connection = self.connection()
+        connection.request(
+            "POST", "/api/simulate",
+            body=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = json.loads(response.read())
+        self.assertEqual(response.status, 400)
+        self.assertIn("Spellblade", body["error"])
         connection.close()
 
 

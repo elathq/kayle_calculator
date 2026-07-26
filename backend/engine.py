@@ -26,9 +26,13 @@ from .data.kayle_data import (
 from .data.items_data import ITEMS
 from .data.runes_data import RUNE_MATH, SHARD_VALUES
 from .damage import effective_resistance, resolve_damage
+from .item_rules import validate_item_build
 
 AS_CAP = 2.5
 SPELLBLADE_CD = 1.5
+SPELLBLADE_WINDOW = 10.0
+ENERGIZE_MAX_STACKS = 100.0
+ENERGIZE_PER_ATTACK = 6.0
 MID_ROLE_QUEST_STAT_MULTIPLIER = 1.08
 FLEET_VISUAL_SYNC_DELAY = 0.1
 GAME_TICK_SECONDS = 1.0 / 30.0
@@ -38,6 +42,11 @@ E_PROJECTILE_TICKS = 1
 def _game_ticks(duration):
     """Round a positive duration up to League's 30 Hz simulation clock."""
     return max(1, math.ceil(duration / GAME_TICK_SECONDS - 1e-9))
+
+
+def _expected_crit_multiplier(crit_chance, crit_damage):
+    """Return the stable expected multiplier for a naturally crittable hit."""
+    return 1.0 + crit_chance * (crit_damage - 1.0)
 
 
 class Simulation:
@@ -84,7 +93,7 @@ class Simulation:
         self.assume_river = bool(self.options.get("assume_river", False))
         self.use_e_for_aa_cancel = bool(
             self.options.get("use_e_for_aa_cancel", True))
-        self.items = self._resolve_items(item_keys)
+        self.items = validate_item_build(level, item_keys)
         self._compute_stats()
         self._init_state()
         self._refresh_dynamic_stats(self.time)
@@ -102,43 +111,6 @@ class Simulation:
         return lerp_by_level(lo, hi, self.level, cap_lvl=20)
 
     # ---------- setup ----------
-
-    def _resolve_items(self, keys):
-        seen, out = set(), []
-        limited_groups = {
-            "spellblade": ("Spellblade", None),
-            "blight": ("Blight", None),
-            "fatality": ("Fatality", None),
-            "boots": ("Boots", None),
-            "starter": ("Starter", None),
-        }
-        for k in keys:
-            if not k or k not in ITEMS:
-                continue
-            if k in seen:
-                self.warnings.append(f"Duplicate {ITEMS[k]['name']} ignored (Limited to 1).")
-                continue
-            it = ITEMS[k]
-            if self.level > 18 and "mid_role_quest" in it.get("tags", []):
-                self.warnings.append(
-                    f"{it['name']} ignored: the mid role quest is incompatible "
-                    "with the top role quest required for levels 19–20.")
-                continue
-            item_groups = [g for g in limited_groups if g in it.get("tags", [])]
-            conflict = next(
-                (g for g in item_groups if limited_groups[g][1] is not None), None)
-            if conflict:
-                label, taken = limited_groups[conflict]
-                self.warnings.append(
-                    f"{it['name']} ignored: Limited to 1 {label} item "
-                    f"({ITEMS[taken]['name']} already equipped).")
-                continue
-            for group in item_groups:
-                label, _ = limited_groups[group]
-                limited_groups[group] = (label, k)
-            seen.add(k)
-            out.append(k)
-        return out
 
     def _compute_stats(self):
         base = kayle_stats_at(self.level)
@@ -321,10 +293,15 @@ class Simulation:
         pre_zeal = self.options.get("pre_stacked_zeal", True)
         self.zeal = PASSIVE["zeal_max_stacks"] if (transcendent or pre_zeal) else 0
         self.seething = 0
+        self.seething_until = -1.0
         self.phantom = 0
+        self.phantom_until = -1.0
         if self.has_rageblade and self.options.get("pre_stacked_rageblade", False):
-            self.seething = ITEMS["guinsoos_rageblade"]["seething"]["max_stacks"]
+            seething = ITEMS["guinsoos_rageblade"]["seething"]
+            self.seething = seething["max_stacks"]
+            self.seething_until = seething["duration"]
         self.spellblade_primed = False
+        self.spellblade_primed_until = -1.0
         self.spellblade_cd_until = -1e9
         self.dd_repeat_used = False
         self.shred_until = -1.0
@@ -349,6 +326,8 @@ class Simulation:
         self.current_movement_speed = float(KAYLE_AS["ms"])
         self.in_combat = False
         self.combat_started_at = None
+        self.energize_stacks = (
+            ENERGIZE_MAX_STACKS if self.fleet_starts_energized else 0.0)
         self.fleet_ready = self.fleet_starts_energized
         self.fleet_ms_until = -1.0
         self.fleet_pending = False
@@ -385,7 +364,7 @@ class Simulation:
         # rune state
         self.pta_stacks = 0
         self.pta_amp_from = None   # amp starts strictly AFTER the proc's frame
-        self.kill_time = None
+        self.kill_time = 0.0 if self.enemy_hp <= 0 else None
         self.attack_count = 0
         self.lt_stacks = 0
         self.conq_stacks = 0
@@ -513,7 +492,26 @@ class Simulation:
 
     # ---------- attack speed ----------
 
+    def _expire_rageblade(self, at_time):
+        if not self.has_rageblade:
+            return
+        if self.seething and at_time >= self.seething_until - 1e-9:
+            self.seething = 0
+            self.seething_until = -1.0
+        if self.phantom and at_time >= self.phantom_until - 1e-9:
+            self.phantom = 0
+            self.phantom_until = -1.0
+
+    def _expire_spellblade(self, at_time):
+        if (self.spellblade_primed
+                and at_time > self.spellblade_primed_until + 1e-9):
+            self.spellblade_primed = False
+            self.spellblade_primed_until = -1.0
+            self.dd_repeat_used = False
+
     def attack_speed(self):
+        self._expire_rageblade(self.time)
+        self._expire_spellblade(self.time)
         bonus = self.level_bonus_as + self.item_as
         bonus += PASSIVE["zeal_as_per_stack"] * self.zeal
         if self.has_rageblade:
@@ -550,6 +548,7 @@ class Simulation:
         Preview those states without consuming or starting their effects.
         """
         saved_primed = self.spellblade_primed
+        saved_primed_until = self.spellblade_primed_until
         saved_hob_stacks = self.hob_stacks
         saved_flurry_until = self.yun_tal_flurry_until
         saved_time = self.time
@@ -558,6 +557,7 @@ class Simulation:
             if (self.spellblade_key == "lich_bane"
                     and at_time >= self.spellblade_cd_until - 1e-9):
                 self.spellblade_primed = True
+                self.spellblade_primed_until = at_time + SPELLBLADE_WINDOW
             if ((m := self._rune(9923))
                     and self.hob_stacks <= 0
                     and self.hob_resets_used < m["extra_stacks"]):
@@ -569,6 +569,7 @@ class Simulation:
             return self.attack_speed()
         finally:
             self.spellblade_primed = saved_primed
+            self.spellblade_primed_until = saved_primed_until
             self.hob_stacks = saved_hob_stacks
             self.yun_tal_flurry_until = saved_flurry_until
             self.time = saved_time
@@ -700,8 +701,17 @@ class Simulation:
             self._refresh_dynamic_stats(at_time)
         return dealt
 
-    def _deal(self, amount, dtype, source, at_time, from_first_strike=False):
-        """dtype: 'physical' | 'magic' | 'true'"""
+    def _deal(
+            self, amount, dtype, source, at_time, from_first_strike=False,
+            *, grants_life_steal=False, basic_damage=False):
+        """Resolve one damage instance through the shared damage pipeline.
+
+        Natural attack crits are applied explicitly by crit-eligible callers.
+        ``basic_damage`` controls source-specific modifiers such as Hexoptics;
+        ``grants_life_steal`` controls healing from the resolved damage.
+        """
+        if basic_damage:
+            amount *= 1.0 + self._hexoptics_amp()
         multiplier = self._amp_multiplier(at_time)
         if dtype in ("magic", "true") and self.has_shadowflame_crit:
             shadowflame_crit = ITEMS["shadowflame"]["shadowflame_crit"]
@@ -723,6 +733,12 @@ class Simulation:
             resistance=resistance,
         )
         dealt = self._record_damage(calc, dtype, source, at_time)
+        if grants_life_steal and self.life_steal:
+            self._heal(
+                dealt * self.life_steal,
+                f"{source} life steal",
+                at_time,
+            )
 
         # First Strike: opens on the first damage; adds 7% post-mit true damage
         if (m := self._rune(8369)) and not from_first_strike:
@@ -748,7 +764,7 @@ class Simulation:
         })
 
     def _flush_scheduled(self, up_to):
-        while True:
+        while self.enemy_hp > 0:
             due = [s for s in self.scheduled if s[0] <= up_to]
             if not due:
                 break
@@ -756,11 +772,17 @@ class Simulation:
             t, fn = due[0]
             self.scheduled.remove(due[0])
             fn(t)
+        if self.enemy_hp <= 0:
+            self.scheduled.clear()
 
     def _advance(self, dt):
+        if self.enemy_hp <= 0:
+            return
         self.time += dt
-        self.end_time = max(self.end_time, self.time)
         self._flush_scheduled(self.time)
+        if self.kill_time is not None and self.kill_time < self.time:
+            self.time = self.kill_time
+        self.end_time = max(self.end_time, self.time)
 
     def _check_cd(self, key, cooldown, label, at_time=None):
         used_at = self.time if at_time is None else at_time
@@ -799,6 +821,7 @@ class Simulation:
         if not m or not self.fleet_ready:
             return
         self.fleet_ready = False
+        self._consume_energized()
         self.fleet_pending = True
         self.fleet_pending_at = at_time + FLEET_VISUAL_SYNC_DELAY
         self.fleet_pending_until = self.fleet_pending_at + m["duration"]
@@ -826,6 +849,8 @@ class Simulation:
     def do_wait(self, duration=FLEET_VISUAL_SYNC_DELAY):
         duration = max(0.0, float(duration))
         self._advance(duration)
+        if self.enemy_hp <= 0:
+            return
         self._activate_pending_fleet(self.time)
         self.events.append({
             "t": round(self.time, 3),
@@ -1090,13 +1115,77 @@ class Simulation:
         missing_fraction = max(
             0.0, min(1.0, (self.enemy_max_hp - target_hp) / self.enemy_max_hp))
         damage = base * (1.0 + bring["missing_hp_max_amp"] * missing_fraction)
-        self._deal(damage, "physical", f"Kraken Slayer — Bring It Down{tag}", at_time)
+        self._deal(
+            damage,
+            "physical",
+            f"Kraken Slayer — Bring It Down{tag}",
+            at_time,
+            grants_life_steal=bring.get("applies_life_steal", False),
+            basic_damage=bring.get("basic_damage", False),
+        )
+
+    def _energize_launch_attack(self):
+        """Generate attack-based stacks and snapshot every shared proc.
+
+        Movement also generates Energize in game, but the simulator has no
+        traveled-distance input. All equipped Energized effects (and Fleet)
+        use the same readiness snapshot so they can trigger together.
+        """
+        if self.energize_stacks < ENERGIZE_MAX_STACKS:
+            gain = ENERGIZE_PER_ATTACK
+            if self.has_statikk:
+                gain += ITEMS["statikk_shiv"]["electrospark"].get(
+                    "bonus_energize_per_attack", 0.0)
+            self.energize_stacks = min(
+                ENERGIZE_MAX_STACKS, self.energize_stacks + gain)
+
+        ready = self.energize_stacks >= ENERGIZE_MAX_STACKS
+        self.fleet_ready = ready
+        self.statikk_ready = ready and self.has_statikk
+        self.stormrazor_ready = ready and self.has_stormrazor
+        self.rapid_firecannon_ready = ready and self.has_rapid_firecannon
+
+    def _consume_energized(self):
+        # Per-effect ready flags are intentionally left intact until each
+        # effect resolves: one attack triggers all equipped Energized effects.
+        self.energize_stacks = 0.0
+
+    def _rageblade_attack(self, at_time):
+        """Advance Seething/Phantom state for one on-attack event."""
+        if not self.has_rageblade:
+            return False
+        self._expire_rageblade(at_time)
+        seething = ITEMS["guinsoos_rageblade"]["seething"]
+        phantom_ready = self.phantom >= 2
+
+        self.seething = min(
+            seething["max_stacks"], self.seething + 1)
+        self.seething_until = at_time + seething["duration"]
+
+        if phantom_ready:
+            self.phantom = 0
+            self.phantom_until = -1.0
+            self.scheduled.append([
+                at_time + seething["phantom_delay"],
+                lambda tt: self._apply_onhits(
+                    tt, tag=" (Phantom Hit)"),
+            ])
+            return True
+
+        # The live Wiki explicitly states that the attack granting the final
+        # Seething stack also grants the first Phantom stack.
+        if self.seething >= seething["max_stacks"]:
+            self.phantom = min(2, self.phantom + 1)
+            self.phantom_until = (
+                at_time + seething["phantom_duration"])
+        return False
 
     def _statikk_hit(self, at_time, tag):
         if not (self.has_statikk and self.statikk_ready):
             return
         spark = ITEMS["statikk_shiv"]["electrospark"]
         self.statikk_ready = False
+        self._consume_energized()
         self._deal(spark["damage"], "magic", f"Statikk Shiv — Electrospark{tag}", at_time)
 
     def _stormrazor_hit(self, at_time, tag):
@@ -1104,6 +1193,7 @@ class Simulation:
             return
         bolt = ITEMS["stormrazor"]["bolt"]
         self.stormrazor_ready = False
+        self._consume_energized()
         self._deal(bolt["damage"], "magic", f"Stormrazor — Bolt{tag}", at_time)
         self.stormrazor_ms_until = at_time + bolt["duration"]
         self._refresh_dynamic_stats(at_time)
@@ -1113,6 +1203,7 @@ class Simulation:
             return
         sharpshooter = ITEMS["rapid_firecannon"]["sharpshooter"]
         self.rapid_firecannon_ready = False
+        self._consume_energized()
         self._deal(
             sharpshooter["damage"], "magic",
             f"Rapid Firecannon — Sharpshooter{tag}", at_time,
@@ -1148,8 +1239,11 @@ class Simulation:
         )
 
     def _begin_basic_attack(self, at_time):
-        """Snapshot the shared crit roll as an expected-damage multiplier."""
-        normal_expected = 1.0 + self.crit_chance * (self.crit_damage - 1.0)
+        """Snapshot expected crit damage for the crit-eligible components."""
+        normal_expected = _expected_crit_multiplier(
+            self.crit_chance,
+            self.crit_damage,
+        )
         opening = ITEMS["fiendhunter_bolts"]["opening_barrage"]
         active = (self.has_fiendhunter and self.fiendhunter_attacks > 0
                   and at_time < self.fiendhunter_until - 1e-9)
@@ -1162,20 +1256,20 @@ class Simulation:
             self.current_attack_crit_multiplier = normal_expected
 
     def _deal_basic_attack(self, source, at_time):
-        raw = (self.total_ad * self.current_attack_crit_multiplier
-               * (1.0 + self._hexoptics_amp()))
+        raw = self.total_ad * self.current_attack_crit_multiplier
         label = source
         if self.current_attack_fiendhunter:
             label += " (Fiendhunter expected crit)"
         elif self.crit_chance > 0:
             label += " (expected crit)"
-        dealt = self._deal(raw, "physical", label, at_time)
-        if self.life_steal:
-            self._heal(
-                dealt * self.life_steal,
-                f"{source} life steal",
-                at_time,
-            )
+        dealt = self._deal(
+            raw,
+            "physical",
+            label,
+            at_time,
+            grants_life_steal=True,
+            basic_damage=True,
+        )
         if self.current_attack_fiendhunter and self.crit_chance > 0:
             opening = ITEMS["fiendhunter_bolts"]["opening_barrage"]
             natural_crit_raw = (self.total_ad * self.crit_damage
@@ -1241,16 +1335,32 @@ class Simulation:
 
         Dusk & Dawn's repeat and Rageblade's Phantom Hit both grant PTA stacks;
         callers can disable the stack for any future non-stacking repeat.
+        Ordinary attack crit chance does not multiply these proc-damage
+        instances. Special effects inside ``_deal``, such as Shadowflame's
+        magic/true-damage crit, still apply when their conditions are met.
         """
         self._refresh_dynamic_stats(at_time)
         for k in self.items:
             it = ITEMS[k]
             if "onhit_magic_flat" in it:
-                self._deal(it["onhit_magic_flat"], "magic", f"{it['name']} on-hit{tag}", at_time)
+                self._deal(
+                    it["onhit_magic_flat"],
+                    "magic",
+                    f"{it['name']} on-hit{tag}",
+                    at_time,
+                    grants_life_steal=it.get(
+                        "onhit_applies_life_steal", False),
+                )
             if "onhit_magic" in it:
                 oh = it["onhit_magic"]
-                self._deal(oh["flat"] + oh["ap_ratio"] * self.ap, "magic",
-                           f"{it['name']} on-hit{tag}", at_time)
+                self._deal(
+                    oh["flat"] + oh["ap_ratio"] * self.ap,
+                    "magic",
+                    f"{it['name']} on-hit{tag}",
+                    at_time,
+                    grants_life_steal=it.get(
+                        "onhit_applies_life_steal", False),
+                )
         self._kraken_hit(at_time, tag)
         self._statikk_hit(at_time, tag)
         self._stormrazor_hit(at_time, tag)
@@ -1283,6 +1393,7 @@ class Simulation:
                 self.pta_amp_from = at_time  # amp for the rest of the combo
 
     def _fire_wave(self, at_time):
+        """Deal Divine Ascent's naturally crittable fire-wave component."""
         growth_levels = max(
             0, self.level - PASSIVE["wave_growth_start_level"] + 1)
         wave_base = (PASSIVE["wave_base"]
@@ -1323,6 +1434,7 @@ class Simulation:
             self.lt_stacks = min(m["max_stacks"], self.lt_stacks + 1)
 
         t = self.time
+        self._energize_launch_attack()
         self._yun_tal_launch_attack(t)
         speed = self.attack_speed()   # also snapshots bonus AS % for the bolt
         crit_chance_snapshot = self.crit_chance
@@ -1372,19 +1484,7 @@ class Simulation:
         self._consume_spellblade(t)
         self._terminus_hit(t)
         # 5. Rageblade stacking / Phantom Hit
-        if self.has_rageblade:
-            rb = ITEMS["guinsoos_rageblade"]["seething"]
-            was_at_max = self.seething >= rb["max_stacks"]
-            self.seething = min(rb["max_stacks"], self.seething + 1)
-            # The attack that reaches maximum Seething stacks does not count
-            # toward "every third attack while at maximum stacks."
-            if was_at_max:
-                if self.phantom == 2:
-                    self.phantom = 0
-                    self.scheduled.append(
-                        [t + 0.15, lambda tt: self._apply_onhits(tt, tag=" (Phantom Hit)")])
-                else:
-                    self.phantom += 1
+        self._rageblade_attack(t)
 
         self._conqueror_heal(attack_dealt, t)
         # Dark Harvest re-check: this attack may have dropped the enemy below 50%
@@ -1429,10 +1529,12 @@ class Simulation:
         if (self.spellblade_key
                 and cast_at >= self.spellblade_cd_until - 1e-9):
             self.spellblade_primed = True
+            self.spellblade_primed_until = cast_at + SPELLBLADE_WINDOW
             self.dd_repeat_used = False
 
     def _consume_spellblade(self, at_time):
         """Consume a primed Spellblade on an attack, including D&D's repeat."""
+        self._expire_spellblade(at_time)
         if not (self.spellblade_primed and self.spellblade_key
                 and at_time >= self.spellblade_cd_until):
             return False
@@ -1444,16 +1546,20 @@ class Simulation:
             * self.crit_chance * 100.0
         )
         dmg = (base_ad_ratio * self.base_ad
+               + sb.get("flat_per_crit_pct", 0.0)
+               * self.crit_chance * 100.0
                + sb.get("ap_ratio", 0.0) * self.ap)
         self._deal(
             dmg, sb.get("damage_type", "magic"),
             f"{it['name']} Spellblade", at_time,
+            grants_life_steal=sb.get("applies_life_steal", False),
         )
         if "heal_ap_ratio" in sb:
             heal = sb["heal_ap_ratio"] * self.ap + sb["heal_bonus_hp_ratio"] * self.bonus_hp
             self._heal(heal, f"{it['name']} Spellblade heal", at_time)
         self._dd_repeat(at_time)
         self.spellblade_primed = False
+        self.spellblade_primed_until = -1.0
         self.spellblade_cd_until = at_time + SPELLBLADE_CD
         return True
 
@@ -1554,9 +1660,8 @@ class Simulation:
             else max(0.0, self.enemy_max_hp - self.enemy_hp))
         phantom_will_proc = False
         if self.has_rageblade:
-            rb = ITEMS["guinsoos_rageblade"]["seething"]
-            phantom_will_proc = (
-                self.seething >= rb["max_stacks"] and self.phantom == 2)
+            self._expire_rageblade(t)
+            phantom_will_proc = self.phantom >= 2
         if self.level < PASSIVE["transcendent_level"]:
             self.zeal = min(PASSIVE["zeal_max_stacks"], self.zeal + 1)
         self._refresh_dynamic_stats(t)
@@ -1574,6 +1679,7 @@ class Simulation:
             self.lt_stacks = min(m["max_stacks"], self.lt_stacks + 1)
 
         self._yun_tal_launch_attack(t)
+        self._energize_launch_attack()
         crit_chance_snapshot = self.crit_chance
         self._prime_spellblade(cast_at)
         self.attack_speed()  # snapshot bonus AS for Lethal Tempo's bolt
@@ -1623,6 +1729,8 @@ class Simulation:
         pct = (E["active_missing_hp_pct"][rank - 1]
                + E["active_missing_hp_per100ap"] * self.ap / 100.0) / 100.0
         if missing_at_cast > 0:
+            # E's missing-health spell damage does not naturally crit. This
+            # remains separate from both the physical attack and fire wave.
             self._deal(pct * missing_at_cast, "magic", "E active (missing HP)", t)
             self._apply_bloodletter_stack(t, "e_active")
 
@@ -1634,17 +1742,7 @@ class Simulation:
         if self.level >= PASSIVE["aflame_level"] and exalted:
             self._fire_wave(t)
         self._terminus_hit(t)
-        if self.has_rageblade:
-            rb = ITEMS["guinsoos_rageblade"]["seething"]
-            was_at_max = self.seething >= rb["max_stacks"]
-            self.seething = min(rb["max_stacks"], self.seething + 1)
-            if was_at_max:
-                if self.phantom == 2:
-                    self.phantom = 0
-                    self.scheduled.append(
-                        [t + 0.15, lambda tt: self._apply_onhits(tt, tag=" (Phantom Hit)")])
-                else:
-                    self.phantom += 1
+        self._rageblade_attack(t)
 
         self._conqueror_heal(attack_dealt, t)
         self._dark_harvest(t)
@@ -1757,6 +1855,8 @@ class Simulation:
             self.slowed_until = max(self.slowed_until, t + 1.5)  # Gunblade slow
         elif act["kind"] == "stasis":
             self._advance(act["duration"])
+            if self.enemy_hp <= 0:
+                return
             self.events.append({
                 "t": round(self.time, 3), "source": f"{it['name']} — Stasis (2.5s, no actions)",
                 "type": "note", "pre": 0, "dealt": 0,
@@ -1804,6 +1904,8 @@ class Simulation:
 
     def run(self):
         for action_index, action in enumerate(self.combo):
+            if self.enemy_hp <= 0:
+                break
             self.current_action_index = action_index
             kind = action.get("type")
             # Fleet's movement-speed jump is delayed by 0.1 seconds in game.
@@ -1813,6 +1915,8 @@ class Simulation:
                 sync_time = max(self.time, self.fleet_pending_at)
                 if sync_time > self.time:
                     self._advance(sync_time - self.time)
+                if self.enemy_hp <= 0:
+                    break
                 self._activate_pending_fleet(sync_time)
             if kind == "AA":
                 next_kind = (
@@ -1842,9 +1946,12 @@ class Simulation:
                 self.do_item_active(action.get("item"))
             elif kind == "WAIT":
                 self.do_wait(action.get("duration", FLEET_VISUAL_SYNC_DELAY))
+            if self.enemy_hp <= 0:
+                self.scheduled.clear()
+                break
         # If the combo ends on Fleet's triggering attack, report the stable
         # post-jump state instead of leaving the result panel at "pending".
-        if self.fleet_pending:
+        if self.enemy_hp > 0 and self.fleet_pending:
             sync_time = max(self.time, self.fleet_pending_at)
             self._activate_pending_fleet(sync_time)
         # Let delayed effects resolve even when the user sequence has already
@@ -1852,7 +1959,8 @@ class Simulation:
         # the entered actions finish around t=1.5. This also includes
         # Stormsurge Squall, Phantom/D&D repeats, Comet/Scorch, and Deathfire
         # ticks; no manual WAIT is needed.
-        self._flush_scheduled(1e9)
+        if self.enemy_hp > 0:
+            self._flush_scheduled(1e9)
         self._refresh_dynamic_stats(self.time)
 
         totals = self.damage_totals
@@ -1913,6 +2021,7 @@ class Simulation:
             "gold_cost": gold,
             "damage_per_1k_gold": round(total / gold * 1000, 1) if gold else None,
             "healing": round(self.heal_total, 1),
+            "items": list(self.items),
             "enemy": {
                 "max_hp": round(self.enemy_max_hp, 1),
                 "bonus_hp": round(self.enemy_bonus_hp, 1),

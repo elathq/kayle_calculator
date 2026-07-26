@@ -4,6 +4,7 @@ from backend.data import ICON_VERSION
 from backend.data.items_data import ITEMS, item_list_for_api, validate_item_catalog
 from backend.data.kayle_data import KAYLE_AS, default_ability_ranks, kayle_stats_at
 from backend.engine import Simulation, simulate_build
+from backend.item_rules import ItemBuildValidationError
 
 
 NEW_ITEMS = {
@@ -83,7 +84,7 @@ class AddedItemTests(unittest.TestCase):
             "ad": 50, "ability_haste": 20, "crit_chance": 25,
         })
         self.assertEqual(ITEMS["yun_tal_wildarrows"]["stats"], {
-            "ad": 50, "attack_speed": 40,
+            "ad": 50, "attack_speed": 40, "crit_chance": 0,
         })
         self.assertEqual(ITEMS["navori_flickerblade"]["stats"], {
             "attack_speed": 40, "crit_chance": 25, "move_speed_pct": 4,
@@ -92,21 +93,24 @@ class AddedItemTests(unittest.TestCase):
             "ap": 90, "magic_pen_flat": 15, "move_speed_pct": 6,
         })
 
-        sim = Simulation(
-            18, default_ability_ranks(18),
-            ["terminus", "lord_dominiks_regards", "bloodletters_curse"],
-            {"hp": 5000, "armor": 100, "mr": 100}, [], {},
-        )
-        self.assertEqual(sim.items, ["terminus"])
-        self.assertEqual(len(sim.warnings), 2)
-
-        spellblades = Simulation(
-            18, default_ability_ranks(18),
-            ["lich_bane", "essence_reaver"],
-            {"hp": 5000, "armor": 100, "mr": 100}, [], {},
-        )
-        self.assertEqual(spellblades.items, ["lich_bane"])
-        self.assertEqual(len(spellblades.warnings), 1)
+        with self.assertRaisesRegex(ItemBuildValidationError, "Fatality"):
+            Simulation(
+                18, default_ability_ranks(18),
+                ["terminus", "lord_dominiks_regards"],
+                {"hp": 5000, "armor": 100, "mr": 100}, [], {},
+            )
+        with self.assertRaisesRegex(ItemBuildValidationError, "Blight"):
+            Simulation(
+                18, default_ability_ranks(18),
+                ["terminus", "bloodletters_curse"],
+                {"hp": 5000, "armor": 100, "mr": 100}, [], {},
+            )
+        with self.assertRaisesRegex(ItemBuildValidationError, "Spellblade"):
+            Simulation(
+                18, default_ability_ranks(18),
+                ["lich_bane", "essence_reaver"],
+                {"hp": 5000, "armor": 100, "mr": 100}, [], {},
+            )
 
     def test_infinity_edge_uses_expected_crit_damage(self):
         level = 10
@@ -122,8 +126,12 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(result["stats"]["crit_chance"], 25.0)
         self.assertEqual(result["stats"]["crit_damage"], 230.0)
 
-    def test_hexoptics_uses_kayles_max_attack_range_without_distance_input(self):
-        level = 10  # ranged Kayle: 525 range -> 8.75% Magnification
+    def test_hexoptics_uses_current_50_unit_scaling_and_500_unit_cap(self):
+        magnification = ITEMS["hexoptics_c44"]["magnification"]
+        self.assertAlmostEqual(magnification["amp_per_unit"], 0.01 / 50.0)
+        self.assertEqual(magnification["max_amp"], 0.10)
+
+        level = 10  # ranged Kayle: 525 range reaches the current 500-unit cap
         result = run(
             ["hexoptics_c44"], [{"type": "AA"}], level=level,
             ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
@@ -131,10 +139,12 @@ class AddedItemTests(unittest.TestCase):
         )
         event = next(e for e in result["events"] if e["type"] == "physical")
         total_ad = kayle_stats_at(level)["base_ad"] + 55
-        self.assertAlmostEqual(event["raw"], total_ad * 1.25 * 1.0875, places=3)
+        self.assertAlmostEqual(event["raw"], total_ad * 1.25 * 1.10, places=3)
 
     def test_rapid_firecannon_extends_hexoptics_range_only_while_energized(self):
-        level = 10  # 525 + capped 150 RFC range reaches Hexoptics' 10% cap
+        # Melee Kayle has 175 range: 3.5% Magnification normally and 4.725%
+        # on RFC's 236.25-range Energized attack.
+        level = 5
         result = run(
             ["hexoptics_c44", "rapid_firecannon"],
             [{"type": "AA"}, {"type": "AA"}], level=level,
@@ -144,8 +154,72 @@ class AddedItemTests(unittest.TestCase):
         basics = [e for e in result["events"] if e["type"] == "physical"]
         total_ad = kayle_stats_at(level)["base_ad"] + 55
         expected_crit = 1 + 0.50 * (KAYLE_AS["crit_damage"] - 1)
-        self.assertAlmostEqual(basics[0]["raw"], total_ad * expected_crit * 1.10, places=3)
-        self.assertAlmostEqual(basics[1]["raw"], total_ad * expected_crit * 1.0875, places=3)
+        self.assertAlmostEqual(
+            basics[0]["raw"], total_ad * expected_crit * 1.04725, places=3)
+        self.assertAlmostEqual(
+            basics[1]["raw"], total_ad * expected_crit * 1.035, places=3)
+
+    def test_hexoptics_amplifies_kraken_basic_damage(self):
+        level = 10
+        enemy = {
+            "hp": 5000, "current_hp": 5000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        result = run(
+            ["hexoptics_c44", "kraken_slayer"],
+            [{"type": "AA"}] * 3,
+            level=level,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy=enemy,
+        )
+        basics = [
+            event for event in result["events"]
+            if event["source"].startswith("Basic attack")
+        ]
+        proc = next(
+            event for event in result["events"]
+            if "Kraken Slayer" in event["source"]
+        )
+        missing_fraction = (
+            enemy["hp"] - basics[2]["hp_before"]
+        ) / enemy["hp"]
+        ranged_level_10_base = 160.0 * 0.8
+        expected = (
+            ranged_level_10_base
+            * (1.0 + 0.75 * missing_fraction)
+            * 1.10
+        )
+        self.assertAlmostEqual(proc["raw"], expected, places=3)
+
+    def test_rageblade_seething_expires_after_three_seconds(self):
+        sim = Simulation(
+            18,
+            {"Q": 0, "W": 0, "E": 0, "R": 0},
+            ["guinsoos_rageblade"],
+            {"hp": 1_000_000, "current_hp": 1_000_000,
+             "armor": 0, "mr": 0},
+            [],
+            {"pre_stacked_rageblade": False},
+        )
+        baseline = sim.attack_speed()
+        sim.do_attack()
+        self.assertGreater(sim.attack_speed(), baseline)
+        sim.do_wait(3.1)
+        self.assertAlmostEqual(sim.attack_speed(), baseline, places=6)
+
+    def test_rageblade_phantom_progress_expires_after_six_seconds(self):
+        result = run(
+            ["guinsoos_rageblade"],
+            ([{"type": "AA"}] * 5
+             + [{"type": "WAIT", "duration": 6.1}, {"type": "AA"}]),
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={"hp": 1_000_000, "current_hp": 1_000_000,
+                   "armor": 0, "mr": 0},
+            options={"pre_stacked_rageblade": False},
+        )
+        self.assertFalse(any(
+            "Phantom Hit" in event["source"] for event in result["events"]
+        ))
 
     def test_riftmaker_converts_bonus_health_and_stacks_damage_by_second(self):
         result = run(["riftmaker"], [{"type": "AA"}] * 5)
@@ -422,6 +496,163 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(rfc_proc["raw"], 40.0)
         self.assertEqual(rfc_proc["dealt"], 20.0)
 
+    def test_energized_recharges_from_six_stacks_per_attack(self):
+        enemy = {
+            "hp": 1_000_000, "current_hp": 1_000_000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        ranks = {"Q": 0, "W": 0, "E": 0, "R": 0}
+        sixteen = run(
+            ["rapid_firecannon"], [{"type": "AA"}] * 16,
+            ranks=ranks, enemy=enemy,
+            options={"fleet_starts_energized": False},
+        )
+        seventeen = run(
+            ["rapid_firecannon"], [{"type": "AA"}] * 17,
+            ranks=ranks, enemy=enemy,
+            options={"fleet_starts_energized": False},
+        )
+        self.assertFalse(any(
+            "Rapid Firecannon" in event["source"]
+            for event in sixteen["events"]
+        ))
+        self.assertEqual(sum(
+            "Rapid Firecannon" in event["source"]
+            for event in seventeen["events"]
+        ), 1)
+
+    def test_statikk_adds_nine_bonus_energize_stacks_per_attack(self):
+        enemy = {
+            "hp": 1_000_000, "current_hp": 1_000_000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        ranks = {"Q": 0, "W": 0, "E": 0, "R": 0}
+        six = run(
+            ["statikk_shiv"], [{"type": "AA"}] * 6,
+            ranks=ranks, enemy=enemy,
+            options={"fleet_starts_energized": False},
+        )
+        seven = run(
+            ["statikk_shiv"], [{"type": "AA"}] * 7,
+            ranks=ranks, enemy=enemy,
+            options={"fleet_starts_energized": False},
+        )
+        self.assertFalse(any(
+            "Electrospark" in event["source"] for event in six["events"]
+        ))
+        self.assertEqual(sum(
+            "Electrospark" in event["source"] for event in seven["events"]
+        ), 1)
+
+    def test_all_energized_items_proc_together_and_recharge_after_ready_start(self):
+        result = run(
+            ["rapid_firecannon", "statikk_shiv", "stormrazor"],
+            [{"type": "AA"}] * 8,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={"hp": 1_000_000, "current_hp": 1_000_000,
+                   "bonus_hp": 0, "armor": 0, "mr": 0},
+            options={"fleet_starts_energized": True},
+        )
+        proc_times = {
+            "rfc": [
+                event["t"] for event in result["events"]
+                if "Rapid Firecannon" in event["source"]
+            ],
+            "statikk": [
+                event["t"] for event in result["events"]
+                if "Electrospark" in event["source"]
+            ],
+            "stormrazor": [
+                event["t"] for event in result["events"]
+                if "Stormrazor" in event["source"]
+            ],
+        }
+        self.assertEqual(len(proc_times["rfc"]), 2)
+        self.assertEqual(proc_times["statikk"], proc_times["rfc"])
+        self.assertEqual(proc_times["stormrazor"], proc_times["rfc"])
+
+    def test_tagged_on_hit_and_spellblade_damage_benefit_from_life_steal(self):
+        enemy = {
+            "hp": 1_000_000, "current_hp": 1_000_000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        no_ability_ranks = {"Q": 0, "W": 0, "E": 0, "R": 0}
+        cases = (
+            (
+                "guinsoos_rageblade",
+                [{"type": "AA"}],
+                no_ability_ranks,
+                lambda source: source == "Guinsoo's Rageblade on-hit",
+            ),
+            (
+                "kraken_slayer",
+                [{"type": "AA"}] * 3,
+                no_ability_ranks,
+                lambda source: "Bring It Down" in source,
+            ),
+            (
+                "terminus",
+                [{"type": "AA"}],
+                no_ability_ranks,
+                lambda source: source == "Terminus on-hit",
+            ),
+            (
+                "wits_end",
+                [{"type": "AA"}],
+                no_ability_ranks,
+                lambda source: source == "Wit's End on-hit",
+            ),
+            (
+                "essence_reaver",
+                [{"type": "Q"}, {"type": "AA"}],
+                {"Q": 1, "W": 0, "E": 0, "R": 0},
+                lambda source: source == "Essence Reaver Spellblade",
+            ),
+            (
+                "lich_bane",
+                [{"type": "Q"}, {"type": "AA"}],
+                {"Q": 1, "W": 0, "E": 0, "R": 0},
+                lambda source: source == "Lich Bane Spellblade",
+            ),
+            (
+                "dusk_and_dawn",
+                [{"type": "Q"}, {"type": "AA"}],
+                {"Q": 1, "W": 0, "E": 0, "R": 0},
+                lambda source: source == "Dusk and Dawn Spellblade",
+            ),
+        )
+        for item, combo, ranks, is_item_life_steal in cases:
+            with self.subTest(item=item):
+                result = run(
+                    ["gunmetal_greaves", item],
+                    combo,
+                    level=18,
+                    ranks=ranks,
+                    enemy=enemy,
+                )
+                eligible_events = [
+                    event for event in result["events"]
+                    if event["type"] in {"physical", "magic"}
+                    and (
+                        event["source"].startswith("Basic attack")
+                        or is_item_life_steal(event["source"])
+                    )
+                ]
+                for damage_event in eligible_events:
+                    life_steal = [
+                        event for event in result["events"]
+                        if event["type"] == "heal"
+                        and event["t"] == damage_event["t"]
+                        and event["source"] == (
+                            f"{damage_event['source']} life steal")
+                    ]
+                    self.assertEqual(len(life_steal), 1)
+                    self.assertAlmostEqual(
+                        life_steal[0]["dealt"],
+                        round(damage_event["dealt"] * 0.05, 1),
+                        places=1,
+                    )
+
     def test_experimental_hexplate_overdrive_starts_on_r_and_feeds_swiftmarch(self):
         sim = Simulation(
             18, default_ability_ranks(18),
@@ -455,21 +686,67 @@ class AddedItemTests(unittest.TestCase):
 
     def test_essence_reaver_spellblade_is_physical_and_scales_with_total_crit(self):
         level = 10
-        result = run(
-            ["essence_reaver"], [{"type": "Q"}, {"type": "AA"}],
-            level=level, ranks={"Q": 1, "W": 0, "E": 0, "R": 0},
-            enemy={"hp": 5000, "armor": 0, "mr": 0},
+        cases = (
+            (["essence_reaver"], 25.0),
+            (["essence_reaver", "infinity_edge"], 50.0),
         )
-        proc = next(
-            e for e in result["events"]
-            if e["source"] == "Essence Reaver Spellblade"
+        for items, crit_chance in cases:
+            with self.subTest(crit_chance=crit_chance):
+                result = run(
+                    items, [{"type": "Q"}, {"type": "AA"}],
+                    level=level, ranks={"Q": 1, "W": 0, "E": 0, "R": 0},
+                    enemy={"hp": 5000, "armor": 0, "mr": 0},
+                )
+                proc = next(
+                    e for e in result["events"]
+                    if e["source"] == "Essence Reaver Spellblade"
+                )
+                expected = (
+                    1.25 * kayle_stats_at(level)["base_ad"]
+                    + 0.5 * crit_chance
+                )
+                self.assertEqual(proc["type"], "physical")
+                self.assertAlmostEqual(proc["raw"], expected, places=3)
+
+    def test_spellblade_expires_after_ten_seconds_and_recast_refreshes_window(self):
+        enemy = {
+            "hp": 1_000_000, "current_hp": 1_000_000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        ranks = {"Q": 1, "W": 1, "E": 0, "R": 0}
+        expired = run(
+            ["essence_reaver"],
+            [
+                {"type": "W"},
+                {"type": "WAIT", "duration": 10.1},
+                {"type": "AA"},
+            ],
+            ranks=ranks,
+            enemy=enemy,
         )
-        expected_ratio = 1.25 + 0.005 * 25
-        self.assertEqual(proc["type"], "physical")
-        self.assertAlmostEqual(
-            proc["raw"], kayle_stats_at(level)["base_ad"] * expected_ratio,
-            places=3,
+        self.assertFalse(any(
+            event["source"] == "Essence Reaver Spellblade"
+            for event in expired["events"]
+        ))
+
+        refreshed = run(
+            ["essence_reaver"],
+            [
+                {"type": "W"},
+                {"type": "WAIT", "duration": 6.0},
+                {"type": "Q"},
+                {"type": "WAIT", "duration": 5.0},
+                {"type": "AA"},
+            ],
+            ranks=ranks,
+            enemy=enemy,
         )
+        procs = [
+            event for event in refreshed["events"]
+            if event["source"] == "Essence Reaver Spellblade"
+        ]
+        self.assertEqual(len(procs), 1)
+        self.assertGreater(procs[0]["t"], 10.0)
 
     def test_yun_tal_can_start_trained_or_build_expected_crit_in_combo(self):
         trained = run(
@@ -490,6 +767,30 @@ class AddedItemTests(unittest.TestCase):
         ]
         self.assertGreater(basics[1]["raw"], basics[0]["raw"])
         self.assertEqual(untrained["stats"]["crit_chance"], 0.4)
+
+    def test_yun_tal_zero_crit_stat_counts_for_jack_of_all_trades(self):
+        self.assertIn("crit_chance", ITEMS["yun_tal_wildarrows"]["stats"])
+        self.assertEqual(ITEMS["yun_tal_wildarrows"]["stats"]["crit_chance"], 0)
+
+        level = 18
+        sim = Simulation(
+            level,
+            {"Q": 0, "W": 0, "E": 0, "R": 0},
+            ["yun_tal_wildarrows", "boots_of_swiftness"],
+            {"hp": 5000, "current_hp": 5000, "bonus_hp": 0,
+             "armor": 0, "mr": 0},
+            [],
+            {
+                "rune_ids": [8316],
+                "pre_stacked_yun_tal": False,
+            },
+        )
+        self.assertEqual(sim.haste, 5.0)
+        self.assertAlmostEqual(
+            sim.total_ad,
+            kayle_stats_at(level)["base_ad"] + 50.0 + 3.6,
+            places=4,
+        )
 
     def test_navori_reduces_remaining_basic_ability_cooldowns(self):
         sim = Simulation(
@@ -589,8 +890,12 @@ class AddedItemTests(unittest.TestCase):
             e["source"] == "Stormsurge - Squall"
             for e in killed_before_squall["events"]
         ))
-        self.assertTrue(any(
+        self.assertFalse(any(
             "nearby AoE omitted" in e["source"]
+            for e in killed_before_squall["events"]
+        ))
+        self.assertTrue(all(
+            e["t"] <= killed_before_squall["kill_time"]
             for e in killed_before_squall["events"]
         ))
 
@@ -604,6 +909,18 @@ class AddedItemTests(unittest.TestCase):
         self.assertNotIn("Fiendhunter", basics[3]["source"])
         true_hits = [e for e in result["events"] if "natural-crit bonus" in e["source"]]
         self.assertEqual(len(true_hits), 3)
+        expected_true = (
+            result["stats"]["total_ad"]
+            * result["stats"]["crit_damage"] / 100.0
+            * result["stats"]["crit_chance"] / 100.0
+            * ITEMS["fiendhunter_bolts"]["opening_barrage"][
+                "natural_crit_true_ratio"]
+        )
+        for hit in true_hits:
+            self.assertEqual(hit["type"], "true")
+            self.assertIsNone(hit["effective_resistance"])
+            self.assertAlmostEqual(hit["raw"], expected_true, places=4)
+            self.assertAlmostEqual(hit["dealt"], expected_true, places=4)
         self.assertEqual(result["stats"]["ultimate_haste"], 30.0)
 
 

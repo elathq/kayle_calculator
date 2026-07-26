@@ -7,16 +7,31 @@ const APP_VERSION = new URL(
 ).searchParams.get("v") || "dev";
 let ITEMS = [];                 // catalog from backend
 let ITEM_BY_KEY = {};
+let ITEM_RULES = { exclusive_groups: {}, level_limits: {} };
 let RUNES = [];                 // rune paths from backend
 let SHARDS = [];                // shard slots from backend
 let RUNE_BY_ID = {};
 let PATH_BY_ID = {};
 let buildSeq = 0;
 const cooldownErrorIndexes = new Set();
+let rankRequestSequence = 0;
+let enemyRequestSequence = 0;
+let previousEnemyMaxHp = 3500;
 
 const MAX_BUILDS = 8;
 const MAX_COMBO_ACTIONS = 100;
 const MAX_BUILD_NAME_LENGTH = 60;
+const CUSTOM_TARGET_PRESET = "__custom__";
+const ABILITIES = Object.freeze(["Q", "W", "E", "R"]);
+const ULTIMATE_UNLOCK_LEVELS = Object.freeze([6, 11, 16]);
+const TARGET_INPUT_IDS = Object.freeze([
+  "enemyHp", "enemyCurrentHp", "enemyBonusHp", "enemyArmor", "enemyMr",
+]);
+const SIMULATION_NUMERIC_INPUT_IDS = Object.freeze([
+  ...TARGET_INPUT_IDS,
+  "gameTime", "kayleHp", "dhSouls", "darkSealStacks",
+  "legendStacks", "relentlessStacks",
+]);
 
 const state = {
   level: 18,
@@ -32,6 +47,37 @@ const $ = (id) => document.getElementById(id);
 function versionedApi(path) {
   const separator = path.includes("?") ? "&" : "?";
   return `${API}${path}${separator}v=${encodeURIComponent(APP_VERSION)}`;
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`Server returned an unreadable response (${response.status})`);
+  }
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
+function showResultsError(message) {
+  const results = $("resultsContainer");
+  results.replaceChildren();
+  const warning = document.createElement("p");
+  warning.className = "warn stale-results";
+  warning.textContent = message;
+  results.appendChild(warning);
+}
+
+function markResultsStale() {
+  const results = $("resultsContainer");
+  if (!results.querySelector(".result-card")) return;
+  showResultsError(
+    "Setup changed — previous results are hidden. Calculate again.",
+  );
 }
 
 function escapeHtml(value) {
@@ -71,14 +117,25 @@ function createItemImage(item, { lazy = false, title = "", onFailure = null } = 
 /* ================= init ================= */
 
 async function init() {
+  const simulateButton = $("simulateBtn");
+  const addBuildButton = $("addBuildBtn");
+  const layout = document.querySelector(".layout");
+  layout.inert = true;
+  layout.setAttribute("aria-busy", "true");
+  simulateButton.disabled = true;
+  simulateButton.textContent = "Loading…";
+  addBuildButton.disabled = true;
+
   // One compressed request replaces the five serial requests needed for the
   // initial catalog, runes, champion progression, and enemy preset.
-  const bootstrap = await (await fetch(
+  const bootstrap = await requestJson(
     versionedApi(
       `/api/bootstrap?level=${state.level}&preset=${state.enemyPreset}`,
-    ))).json();
+    ),
+  );
 
   ITEMS = bootstrap.items;
+  ITEM_RULES = bootstrap.item_rules;
   ITEMS.forEach((it) => (ITEM_BY_KEY[it.key] = it));
 
   const runeData = bootstrap.runes;
@@ -92,17 +149,24 @@ async function init() {
 
   const presets = bootstrap.enemy_presets;
   const sel = $("enemyPreset");
+  sel.replaceChildren();
   presets.forEach((p) => {
     const o = document.createElement("option");
     o.value = p.key;
     o.textContent = p.name;
     sel.appendChild(o);
   });
+  const customPreset = document.createElement("option");
+  customPreset.value = CUSTOM_TARGET_PRESET;
+  customPreset.textContent = "Custom";
+  sel.appendChild(customPreset);
   sel.value = state.enemyPreset;
 
   state.ranks = bootstrap.champion.default_ranks;
   buildRankSelects();
-  for (const ab of ["Q", "W", "E", "R"]) $("rank" + ab).value = state.ranks[ab];
+  for (const ability of ABILITIES) {
+    $("rank" + ability).value = state.ranks[ability];
+  }
   applyEnemyData(bootstrap.enemy);
   addBuild();                   // start with one build
   renderPalette();
@@ -110,22 +174,41 @@ async function init() {
   updatePassiveBadge();
 
   // events
-  $("levelSlider").addEventListener("input", onLevelChange);
+  $("levelSlider").addEventListener("input", () => {
+    onLevelChange().catch((error) => {
+      showResultsError(`Could not update the level: ${error.message}`);
+    });
+  });
   $("autoRanksBtn").addEventListener("click", async () => {
     state.ranksTouched = false;
-    await applyAutoRanks();
+    try {
+      await applyAutoRanks();
+    } catch (error) {
+      showResultsError(`Could not assign ability ranks: ${error.message}`);
+    }
   });
-  ["rankQ", "rankW", "rankE", "rankR"].forEach((id) =>
-    $(id).addEventListener("change", () => {
+  ABILITIES.forEach((ability) =>
+    $("rank" + ability).addEventListener("change", () => {
+      rankRequestSequence += 1;
       state.ranksTouched = true;
       state.ranks = readRanks();
+      updateAbilityRankValidity($("rank" + ability));
     })
   );
-  $("enemyPreset").addEventListener("change", onPresetChange);
+  $("enemyPreset").addEventListener("change", () => {
+    onPresetChange().catch((error) => {
+      showResultsError(`Could not update the target: ${error.message}`);
+    });
+  });
+  TARGET_INPUT_IDS.forEach((id) =>
+    $(id).addEventListener("input", markTargetCustom));
+  $("enemyHp").addEventListener("input", updateCurrentHpMaximum);
+  $("enemyHp").addEventListener("change", syncCurrentHpLimit);
   $("addBuildBtn").addEventListener("click", () => { addBuild(); });
   $("clearComboBtn").addEventListener("click", () => {
     state.combo = [];
     cooldownErrorIndexes.clear();
+    markResultsStale();
     renderCombo();
   });
   $("simulateBtn").addEventListener("click", simulate);
@@ -158,20 +241,31 @@ async function init() {
     if (!$("itemOverlay").classList.contains("hidden")) closeOverlay();
     if (!$("runeOverlay").classList.contains("hidden")) closeRuneEditor();
   });
+  document.querySelector(".layout").addEventListener("input", markResultsStale);
+  document.querySelector(".layout").addEventListener("change", markResultsStale);
+  simulateButton.disabled = false;
+  simulateButton.textContent = "Calculate";
+  addBuildButton.disabled = false;
+  layout.inert = false;
+  layout.removeAttribute("aria-busy");
 }
 
 /* ================= config ================= */
 
 function rankCap(ability, level) {
-  if (ability === "R") return level >= 16 ? 3 : level >= 11 ? 2 : level >= 6 ? 1 : 0;
+  if (ability === "R") {
+    return ULTIMATE_UNLOCK_LEVELS.filter(
+      (unlockLevel) => level >= unlockLevel,
+    ).length;
+  }
   return Math.min(5, Math.floor((level + 1) / 2));
 }
 
 function buildRankSelects() {
-  for (const ab of ["Q", "W", "E", "R"]) {
-    const sel = $("rank" + ab);
+  for (const ability of ABILITIES) {
+    const sel = $("rank" + ability);
     sel.innerHTML = "";
-    const cap = rankCap(ab, state.level);
+    const cap = rankCap(ability, state.level);
     for (let i = 0; i <= cap; i++) {
       const o = document.createElement("option");
       o.value = i;
@@ -188,30 +282,69 @@ function readRanks() {
   };
 }
 
-async function applyAutoRanks() {
-  const data = await (await fetch(
-    versionedApi(`/api/champion?level=${state.level}`),
-  )).json();
+function updateAbilityRankValidity(reportTarget = null) {
+  const availablePoints = Math.min(state.level, 18);
+  const spentPoints = Object.values(state.ranks).reduce((sum, rank) => sum + rank, 0);
+  const message = spentPoints > availablePoints
+    ? `Level ${state.level} has ${availablePoints} ability points, but ${spentPoints} are assigned.`
+    : "";
+  for (const ability of ABILITIES) {
+    $("rank" + ability).setCustomValidity(message);
+  }
+  if (message && reportTarget) reportTarget.reportValidity();
+  return message === "";
+}
+
+async function applyAutoRanks(level = state.level) {
+  const requestSequence = ++rankRequestSequence;
+  const data = await requestJson(
+    versionedApi(`/api/champion?level=${level}`),
+  );
+  if (requestSequence !== rankRequestSequence
+      || level !== state.level
+      || state.ranksTouched) return false;
   state.ranks = data.default_ranks;
   buildRankSelects();
-  for (const ab of ["Q", "W", "E", "R"]) $("rank" + ab).value = state.ranks[ab];
+  for (const ability of ABILITIES) {
+    $("rank" + ability).value = state.ranks[ability];
+  }
+  updateAbilityRankValidity();
+  markResultsStale();
+  return true;
 }
 
 async function onLevelChange() {
-  state.level = +$("levelSlider").value;
-  $("levelValue").textContent = state.level;
+  const level = +$("levelSlider").value;
+  state.level = level;
+  $("levelValue").textContent = level;
   updatePassiveBadge();
+  const removedItems = removeLevelRestrictedItems(level);
+  if (removedItems.length) {
+    renderBuilds();
+    renderPalette();
+    showResultsError(
+      `Removed ${removedItems.join(", ")} because mid-role quest rewards `
+      + "cannot be used at levels 19–20.",
+    );
+  }
   if (!state.ranksTouched) {
-    await applyAutoRanks();
+    await applyAutoRanks(level);
   } else {
     // clamp manual ranks to new caps
     buildRankSelects();
-    for (const ab of ["Q", "W", "E", "R"]) {
-      state.ranks[ab] = Math.min(state.ranks[ab], rankCap(ab, state.level));
-      $("rank" + ab).value = state.ranks[ab];
+    for (const ability of ABILITIES) {
+      state.ranks[ability] = Math.min(
+        state.ranks[ability],
+        rankCap(ability, level),
+      );
+      $("rank" + ability).value = state.ranks[ability];
     }
+    updateAbilityRankValidity();
   }
-  await onPresetChange();       // enemy scales with game state
+  if (state.level !== level) return;
+  if (state.enemyPreset !== CUSTOM_TARGET_PRESET) {
+    await onPresetChange();     // presets scale with game state
+  }
 }
 
 function updatePassiveBadge() {
@@ -232,12 +365,54 @@ function updatePassiveBadge() {
 }
 
 async function onPresetChange() {
-  state.enemyPreset = $("enemyPreset").value;
-  const data = await (await fetch(
-    versionedApi(
-      `/api/enemy_preset?preset=${state.enemyPreset}&level=${state.level}`,
-    ))).json();
+  const select = $("enemyPreset");
+  const preset = select.value;
+  if (preset === CUSTOM_TARGET_PRESET) {
+    markTargetCustom();
+    return true;
+  }
+
+  const level = state.level;
+  const previousPreset = state.enemyPreset;
+  const requestSequence = ++enemyRequestSequence;
+  state.enemyPreset = preset;
+  updateTargetPresetNote();
+  let data;
+  try {
+    data = await requestJson(
+      versionedApi(
+        `/api/enemy_preset?preset=${preset}&level=${level}`,
+      ),
+    );
+  } catch (error) {
+    if (requestSequence !== enemyRequestSequence
+        || select.value !== preset
+        || level !== state.level) return false;
+    state.enemyPreset = previousPreset;
+    select.value = previousPreset;
+    updateTargetPresetNote();
+    throw error;
+  }
+  if (requestSequence !== enemyRequestSequence
+      || preset !== select.value
+      || level !== state.level) return false;
+  state.enemyPreset = preset;
+  updateTargetPresetNote();
   applyEnemyData(data);
+  return true;
+}
+
+function markTargetCustom() {
+  enemyRequestSequence += 1;
+  state.enemyPreset = CUSTOM_TARGET_PRESET;
+  $("enemyPreset").value = CUSTOM_TARGET_PRESET;
+  updateTargetPresetNote();
+}
+
+function updateTargetPresetNote() {
+  $("enemyPresetNote").textContent = state.enemyPreset === CUSTOM_TARGET_PRESET
+    ? "Manual values are preserved when Kayle's level changes."
+    : "Base-stat averages. Items are not included.";
 }
 
 function applyEnemyData(data) {
@@ -246,6 +421,28 @@ function applyEnemyData(data) {
   $("enemyBonusHp").value = data.bonus_hp || 0;
   $("enemyArmor").value = data.armor;
   $("enemyMr").value = data.mr;
+  previousEnemyMaxHp = Number(data.hp);
+  $("enemyCurrentHp").max = String(data.hp);
+  markResultsStale();
+}
+
+function updateCurrentHpMaximum() {
+  const maxHp = Number($("enemyHp").value);
+  if (!Number.isFinite(maxHp) || maxHp < 1) return;
+  $("enemyCurrentHp").max = String(maxHp);
+}
+
+function syncCurrentHpLimit() {
+  const maxHp = Number($("enemyHp").value);
+  if (!Number.isFinite(maxHp) || maxHp < 1) return;
+  const currentHpInput = $("enemyCurrentHp");
+  const currentHp = Number(currentHpInput.value);
+  currentHpInput.max = String(maxHp);
+  if (currentHpInput.value !== ""
+      && (currentHp > maxHp || currentHp === previousEnemyMaxHp)) {
+    currentHpInput.value = String(maxHp);
+  }
+  previousEnemyMaxHp = maxHp;
 }
 
 /* ================= builds ================= */
@@ -271,12 +468,14 @@ function addBuild() {
     collapsed: false,
     runes: defaultRunes(),
   });
+  markResultsStale();
   renderBuilds();
   renderPalette();
 }
 
 function removeBuild(id) {
   state.builds = state.builds.filter((b) => b.id !== id);
+  markResultsStale();
   renderBuilds();
   renderPalette();
 }
@@ -311,6 +510,7 @@ function duplicateBuild(id) {
       shards: [...runes.shards],
     },
   });
+  markResultsStale();
   renderBuilds();
   renderPalette();
 }
@@ -456,8 +656,75 @@ function itemPickerTabs(item) {
   return tabs;
 }
 
+function itemLevelRestriction(item, level = state.level) {
+  for (const [tag, rule] of Object.entries(ITEM_RULES.level_limits || {})) {
+    if (item.tags.includes(tag) && level > rule.max_level) {
+      return `${item.name} is unavailable at level ${level}: ${rule.reason}.`;
+    }
+  }
+  return "";
+}
+
+function itemRestriction(build, slotIdx, itemKey, level = state.level) {
+  const item = ITEM_BY_KEY[itemKey];
+  if (!item) return "Unknown item.";
+
+  const levelRestriction = itemLevelRestriction(item, level);
+  if (levelRestriction) return levelRestriction;
+
+  const exclusiveGroups = ITEM_RULES.exclusive_groups || {};
+  for (let otherIdx = 0; otherIdx < build.items.length; otherIdx += 1) {
+    if (otherIdx === slotIdx) continue;
+    const otherKey = build.items[otherIdx];
+    if (!otherKey) continue;
+    const other = ITEM_BY_KEY[otherKey];
+    if (!other) continue;
+    if (otherKey === itemKey) {
+      return `${item.name} is already equipped in this build.`;
+    }
+    const conflictingGroup = Object.keys(exclusiveGroups).find(
+      (group) => item.tags.includes(group) && other.tags.includes(group),
+    );
+    if (conflictingGroup) {
+      return `Only one ${exclusiveGroups[conflictingGroup]} item is allowed; `
+        + `${other.name} is already equipped.`;
+    }
+  }
+  return "";
+}
+
+function removeLevelRestrictedItems(level) {
+  const removed = [];
+  for (const build of state.builds) {
+    build.items = build.items.map((key) => {
+      if (!key) return key;
+      const item = ITEM_BY_KEY[key];
+      if (!item || !itemLevelRestriction(item, level)) return key;
+      removed.push(`${item.name} from ${build.name}`);
+      return null;
+    });
+  }
+  return removed;
+}
+
+function validateBuildItems() {
+  for (const build of state.builds) {
+    for (let slotIdx = 0; slotIdx < build.items.length; slotIdx += 1) {
+      const key = build.items[slotIdx];
+      if (!key) continue;
+      const restriction = itemRestriction(build, slotIdx, key);
+      if (restriction) {
+        showResultsError(`${build.name} has an illegal item setup: ${restriction}`);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function openOverlay(buildId, slotIdx) {
   overlayTarget = { buildId, slotIdx };
+  $("itemPickerStatus").textContent = "";
   renderItemPicker();
   $("itemOverlay").classList.remove("hidden");
 }
@@ -474,10 +741,14 @@ function renderItemPicker() {
   grid.innerHTML = "";
   const visibleItems = ITEMS.filter((it) =>
     itemPickerTabs(it).includes(activeItemTab));
+  const build = state.builds.find((item) => item.id === overlayTarget?.buildId);
   for (const it of visibleItems) {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "item-tile";
+    const restriction = build
+      ? itemRestriction(build, overlayTarget.slotIdx, it.key)
+      : "The selected build no longer exists.";
     const statBits = Object.entries(it.stats).map(([k, v]) => {
       const label = { ad: "AD", ap: "AP", attack_speed: "AS%", ability_haste: "AH",
         ultimate_haste: "Ult AH", crit_chance: "Crit%", crit_damage_bonus: "Crit dmg%",
@@ -500,7 +771,14 @@ function renderItemPicker() {
     stats.className = "istats";
     stats.textContent = statBits;
     tile.append(image, name, cost, stats);
-    tile.title = it.passive_text;
+    if (restriction) {
+      const unavailable = document.createElement("span");
+      unavailable.className = "irestriction";
+      unavailable.textContent = restriction;
+      tile.appendChild(unavailable);
+      tile.disabled = true;
+    }
+    tile.title = restriction || it.passive_text;
     tile.addEventListener("click", () => setSlot(it.key));
     grid.appendChild(tile);
   }
@@ -509,7 +787,16 @@ function renderItemPicker() {
 function setSlot(key) {
   if (!overlayTarget) return;
   const b = state.builds.find((x) => x.id === overlayTarget.buildId);
-  if (b) b.items[overlayTarget.slotIdx] = key;
+  if (!b) return;
+  if (key) {
+    const restriction = itemRestriction(b, overlayTarget.slotIdx, key);
+    if (restriction) {
+      $("itemPickerStatus").textContent = restriction;
+      return;
+    }
+  }
+  b.items[overlayTarget.slotIdx] = key;
+  markResultsStale();
   closeOverlay();
   renderBuilds();
   renderPalette();
@@ -542,6 +829,7 @@ function closeRuneEditor() {
 function clearRunes() {
   const b = state.builds.find((x) => x.id === runeTarget);
   if (b) b.runes = defaultRunes();
+  markResultsStale();
   renderRuneEditor();
 }
 
@@ -603,6 +891,7 @@ function renderRuneEditor() {
         R.secondary = RUNES.find((x) => x.id !== p.id).id;
         R.secondarySlots = [];
       }
+      markResultsStale();
       renderRuneEditor();
     });
     primTabs.appendChild(tab);
@@ -619,6 +908,7 @@ function renderRuneEditor() {
       rowEl.appendChild(runeOptEl(r, selected, () => {
         if (row === 0) R.keystone = R.keystone === r.id ? null : r.id;
         else R.primarySlots[row - 1] = R.primarySlots[row - 1] === r.id ? null : r.id;
+        markResultsStale();
         renderRuneEditor();
       }));
     }
@@ -644,6 +934,7 @@ function renderRuneEditor() {
       if (R.secondary === p.id) return;
       R.secondary = p.id;
       R.secondarySlots = [];
+      markResultsStale();
       renderRuneEditor();
     });
     secTabs.appendChild(tab);
@@ -665,6 +956,7 @@ function renderRuneEditor() {
           if (R.secondarySlots.length >= 2) R.secondarySlots.shift();
           R.secondarySlots.push({ row, id: r.id });
         }
+        markResultsStale();
         renderRuneEditor();
       }));
     }
@@ -696,7 +988,11 @@ function renderRuneEditor() {
       el.innerHTML = `<img src="${opt.icon}" alt="${opt.name}" loading="lazy" decoding="async">
         ${opt.combat ? '<span class="dmg-dot"></span>' : ""}
         ${runeTooltipHtml(opt.name, opt.text, status, statusClass)}`;
-      el.addEventListener("click", () => { R.shards[row] = opt.key; renderRuneEditor(); });
+      el.addEventListener("click", () => {
+        R.shards[row] = opt.key;
+        markResultsStale();
+        renderRuneEditor();
+      });
       rowEl.appendChild(el);
     }
     sec.appendChild(rowEl);
@@ -806,6 +1102,7 @@ function renderCombo() {
       e.stopPropagation();
       state.combo.splice(idx, 1);
       cooldownErrorIndexes.clear();
+      markResultsStale();
       renderCombo();
     });
     chip.appendChild(x);
@@ -850,6 +1147,7 @@ function appendComboAction(action) {
   if (state.combo.length >= MAX_COMBO_ACTIONS) return;
   state.combo.push({ ...action });
   cooldownErrorIndexes.clear();
+  markResultsStale();
   renderCombo();
 }
 
@@ -868,12 +1166,15 @@ function handleDrop(e, targetIdx) {
   try { data = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
   if (data.from === "palette") {
     if (state.combo.length >= MAX_COMBO_ACTIONS) return;
-    const validBaseAction = data.action
-      && BASE_ACTIONS.some((item) => item.type === data.action.type);
+    const baseAction = data.action
+      && BASE_ACTIONS.find((item) => item.type === data.action.type);
     const validItemAction = data.action?.type === "ITEM_ACTIVE"
       && ITEM_BY_KEY[data.action.item]?.has_active;
-    if (!validBaseAction && !validItemAction) return;
-    state.combo.splice(targetIdx, 0, { ...data.action });
+    if (!baseAction && !validItemAction) return;
+    const action = baseAction
+      ? { type: baseAction.type }
+      : { type: "ITEM_ACTIVE", item: data.action.item };
+    state.combo.splice(targetIdx, 0, action);
   } else if (data.from === "track") {
     if (!Number.isInteger(data.index)
         || data.index < 0 || data.index >= state.combo.length) return;
@@ -882,6 +1183,7 @@ function handleDrop(e, targetIdx) {
     state.combo.splice(targetIdx, 0, moved);
   }
   cooldownErrorIndexes.clear();
+  markResultsStale();
   renderCombo();
 }
 
@@ -903,58 +1205,86 @@ function closeCooldownDialog() {
   $("simulateBtn").focus();
 }
 
+function validateSimulationInputs() {
+  state.ranks = readRanks();
+  if (!updateAbilityRankValidity()) {
+    $("rankQ").reportValidity();
+    return false;
+  }
+  if (!validateBuildItems()) return false;
+
+  syncCurrentHpLimit();
+  for (const id of SIMULATION_NUMERIC_INPUT_IDS) {
+    const input = $(id);
+    if (!input.checkValidity()) {
+      input.reportValidity();
+      input.focus();
+      return false;
+    }
+  }
+  return true;
+}
+
+function buildSimulationPayload() {
+  return {
+    level: state.level,
+    ability_ranks: state.ranks,
+    builds: state.builds.map((b) => ({
+      name: b.name,
+      items: b.items.filter(Boolean),
+      runes: {
+        primary: PATH_BY_ID[b.runes.primary].key,
+        secondary: PATH_BY_ID[b.runes.secondary].key,
+        selected: selectedRuneKeys(b),
+        shards: b.runes.shards || [],
+      },
+    })),
+    enemy: {
+      hp: Number($("enemyHp").value),
+      current_hp: Number($("enemyCurrentHp").value),
+      bonus_hp: Number($("enemyBonusHp").value),
+      armor: Number($("enemyArmor").value),
+      mr: Number($("enemyMr").value),
+    },
+    combo: state.combo,
+    options: {
+      pre_stacked_zeal: $("optZeal").checked,
+      pre_stacked_rageblade: $("optRageblade").checked,
+      pre_stacked_yun_tal: $("optYunTal").checked,
+      game_time_min: Number($("gameTime").value),
+      kayle_hp_pct: Number($("kayleHp").value),
+      dh_souls: Number($("dhSouls").value),
+      dark_seal_stacks: Number($("darkSealStacks").value),
+      legend_stacks: Number($("legendStacks").value),
+      relentless_stacks: Number($("relentlessStacks").value),
+      fleet_starts_energized: $("fleetEnergized").checked,
+      assume_river: $("assumeRiver").checked,
+      use_e_for_aa_cancel: $("useEForAaCancel").checked,
+    },
+  };
+}
+
 async function simulate() {
   const btn = $("simulateBtn");
   cooldownErrorIndexes.clear();
   renderCombo();
+  if (!validateSimulationInputs()) return;
   btn.disabled = true;
   btn.textContent = "Calculating…";
   try {
-    const payload = {
-      level: state.level,
-      ability_ranks: state.ranks,
-      builds: state.builds.map((b) => ({
-        name: b.name,
-        items: b.items.filter(Boolean),
-        runes: {
-          primary: PATH_BY_ID[b.runes.primary].key,
-          secondary: PATH_BY_ID[b.runes.secondary].key,
-          selected: selectedRuneKeys(b),
-          shards: b.runes.shards || [],
-        },
-      })),
-      enemy: {
-        hp: +$("enemyHp").value || 1,
-        current_hp: $("enemyCurrentHp").value === ""
-          ? (+$("enemyHp").value || 1)
-          : +$("enemyCurrentHp").value,
-        bonus_hp: +$("enemyBonusHp").value || 0,
-        armor: +$("enemyArmor").value || 0,
-        mr: +$("enemyMr").value || 0,
-      },
-      combo: state.combo,
-      options: {
-        pre_stacked_zeal: $("optZeal").checked,
-        pre_stacked_rageblade: $("optRageblade").checked,
-        pre_stacked_yun_tal: $("optYunTal").checked,
-        game_time_min: +$("gameTime").value || 0,
-        kayle_hp_pct: +$("kayleHp").value || 100,
-        dh_souls: +$("dhSouls").value || 0,
-        dark_seal_stacks: +$("darkSealStacks").value || 0,
-        legend_stacks: +$("legendStacks").value || 0,
-        relentless_stacks: +$("relentlessStacks").value || 0,
-        fleet_starts_energized: $("fleetEnergized").checked,
-        assume_river: $("assumeRiver").checked,
-        use_e_for_aa_cancel: $("useEForAaCancel").checked,
-      },
-    };
-    const res = await fetch(`${API}/api/simulate`, {
+    const payload = buildSimulationPayload();
+    const requestSignature = JSON.stringify(payload);
+    const data = await requestJson(`${API}/api/simulate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (JSON.stringify(buildSimulationPayload()) !== requestSignature) {
+      showResultsError(
+        "Setup changed while the calculation was running. Calculate again for current results.",
+      );
+      return;
+    }
     const cooldownErrors = data.results.flatMap((result) =>
       (result.cooldown_errors || []).map((error) => ({
         ...error,
@@ -979,12 +1309,7 @@ async function simulate() {
     }
     renderResults(data.results);
   } catch (err) {
-    const results = $("resultsContainer");
-    results.replaceChildren();
-    const warning = document.createElement("p");
-    warning.className = "warn";
-    warning.textContent = `Simulation failed: ${err.message}`;
-    results.appendChild(warning);
+    showResultsError(`Simulation failed: ${err.message}`);
   } finally {
     btn.disabled = false;
     btn.textContent = "Calculate";
@@ -1146,4 +1471,23 @@ function renderResults(results) {
   }
 }
 
-init();
+function showInitializationError(error) {
+  const layout = document.querySelector(".layout");
+  layout.inert = false;
+  layout.removeAttribute("aria-busy");
+  showResultsError(`The simulator could not load: ${error.message}`);
+  const retry = document.createElement("button");
+  retry.id = "retryInitBtn";
+  retry.type = "button";
+  retry.className = "secondary-btn";
+  retry.textContent = "Retry";
+  retry.addEventListener("click", () => window.location.reload());
+  $("resultsContainer").appendChild(retry);
+  layout.querySelectorAll("input, select, button").forEach((control) => {
+    if (control !== retry) control.disabled = true;
+  });
+  $("simulateBtn").disabled = true;
+  $("simulateBtn").textContent = "Unavailable";
+}
+
+init().catch(showInitializationError);
