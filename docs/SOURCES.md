@@ -4,10 +4,10 @@ This is the external-source ledger. It records provenance and version pins; it
 does not duplicate the formulas in the [Simulation model](MODEL.md).
 
 ```text
-last review          = 2026-07-26
+last review          = 2026-07-28
 local Riot asset set = Data Dragon 16.14.1
 live rules snapshot  = League Wiki patch 26.14
-League Wiki pages    = live and may change after the 2026-07-26 review
+League Wiki pages    = live and may change after the 2026-07-28 review
 ```
 
 Related records:
@@ -113,6 +113,7 @@ baseline fixture is
 | Kraken Slayer | [Kraken Slayer](https://wiki.leagueoflegends.com/en-us/Kraken_Slayer) |
 | Terminus | [Terminus](https://wiki.leagueoflegends.com/en-us/Terminus) |
 | Infinity Edge | [Infinity Edge](https://wiki.leagueoflegends.com/en-us/Infinity_Edge) |
+| Blade of the Ruined King | [Blade of the Ruined King](https://wiki.leagueoflegends.com/en-us/Blade_of_the_Ruined_King) |
 | Bloodthirster | [Bloodthirster](https://wiki.leagueoflegends.com/en-us/Bloodthirster) |
 | Bloodletter's Curse | [Bloodletter's Curse](https://wiki.leagueoflegends.com/en-us/Bloodletter%27s_Curse) |
 | Hexoptics C44 | [Hexoptics C44](https://wiki.leagueoflegends.com/en-us/Hexoptics_C44) |
@@ -131,16 +132,16 @@ baseline fixture is
 
 ### Live AD-item audit
 
-On 2026-07-26, the direct Wiki pages above were checked against the live
+On 2026-07-28, the direct Wiki pages above were checked against the live
 [patch 26.14](https://wiki.leagueoflegends.com/en-us/V26.14) rules. The
-21-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
-Rageblade, Kraken Slayer, Terminus, Infinity Edge, Bloodthirster, Hexoptics C44, Phantom
-Dancer, Rapid Firecannon, Experimental Hexplate, Essence Reaver, Yun Tal
-Wildarrows, Navori Flickerblade, Lord Dominik's Regards, Mortal Reminder,
-Wit's End, Statikk
-Shiv, Stormrazor, Fiendhunter Bolts, and Hextech Gunblade. The starter items
-remain in the Starter picker tab, and the hybrid Gunblade remains in the AP
-tab according to the selected picker policy.
+22-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
+Rageblade, Kraken Slayer, Terminus, Infinity Edge, Blade of the Ruined King,
+Bloodthirster, Hexoptics C44, Phantom Dancer, Rapid Firecannon, Experimental
+Hexplate, Essence Reaver, Yun Tal Wildarrows, Navori Flickerblade, Lord
+Dominik's Regards, Mortal Reminder, Wit's End, Statikk Shiv, Stormrazor,
+Fiendhunter Bolts, and Hextech Gunblade. The starter items remain in the
+Starter picker tab, and the hybrid Gunblade remains in the AP tab according
+to the selected picker policy.
 
 The audit used each live item page, its Notes section, and its patch history.
 Those sources distinguish basic-damage and life-steal-applying item tags from
@@ -149,6 +150,7 @@ ordinary proc damage; the resulting formulas and trigger rules are recorded in
 
 Relevant Riot change records:
 
+- [Patch 25.14 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-14-notes/)
 - [Patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/)
 - [Patch 26.11 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-11-notes/)
 - [Patch 25.21 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-21-notes/)
@@ -156,6 +158,9 @@ Relevant Riot change records:
 The linked notes support these unusual changes:
 
 ```text
+patch 25.14:
+  - Blade current-health on-hit = 9% melee / 6% ranged
+
 patch 26.9:
   - Doran's Bow introduction
   - Dusk and Dawn healing addition
@@ -177,9 +182,10 @@ value. Non-damage passives may appear in the UI while remaining outside the
 Catalog cross-check snapshot:
 
 ```text
-review date        = 2026-07-26
+review date        = 2026-07-28
 Riot catalog       = Data Dragon 16.14.1
 live Wiki patch    = 26.14
+Blade of the Ruined King ID = 3153
 Bloodletter's Curse ID = 8010
 Stormrazor ID          = 3097
 Rapid Firecannon ID    = 3094

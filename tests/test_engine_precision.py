@@ -370,7 +370,7 @@ class EnginePrecisionTests(unittest.TestCase):
         pta_events = [event for event in result["events"]
                       if event["source"] == "Press the Attack"]
         self.assertEqual(len(pta_events), 1)
-        self.assertEqual(result["total_damage"], 4529.36)
+        self.assertEqual(result["total_damage"], 4181.31)
 
     def test_e_missing_health_uses_hp_before_the_empowered_attack(self):
         options = {
@@ -812,8 +812,8 @@ class EnginePrecisionTests(unittest.TestCase):
             ["nashors_tooth", "dusk_and_dawn", "rabadons_deathcap"], ENEMY,
             [{"type": "Q"}, {"type": "AA"}, {"type": "E"}], options)
 
-        self.assertEqual(result["total_damage"], 636.70)
-        self.assertEqual(result["enemy"]["remaining_hp"], 2863.30)
+        self.assertEqual(result["total_damage"], 628.72)
+        self.assertEqual(result["enemy"]["remaining_hp"], 2871.28)
         spellblades = [event for event in result["events"]
                        if event["source"] == "Dusk and Dawn Spellblade"]
         self.assertEqual(len(spellblades), 1)
@@ -823,7 +823,7 @@ class EnginePrecisionTests(unittest.TestCase):
             ["nashors_tooth", "dusk_and_dawn", "rabadons_deathcap"], ENEMY,
             [{"type": "Q"}, {"type": "AA"},
              {"type": "E", "timing": "delayed"}], options)
-        self.assertEqual(waited["total_damage"], 636.70)
+        self.assertEqual(waited["total_damage"], 628.72)
 
         without_dusk = simulate_build(
             LEVEL, default_ability_ranks(LEVEL),

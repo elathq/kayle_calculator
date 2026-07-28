@@ -1150,7 +1150,7 @@ class Simulation:
         # effect resolves: one attack triggers all equipped Energized effects.
         self.energize_stacks = 0.0
 
-    def _rageblade_attack(self, at_time):
+    def _rageblade_attack(self, at_time, *, attack_is_melee=None):
         """Advance Seething/Phantom state for one on-attack event."""
         if not self.has_rageblade:
             return False
@@ -1168,7 +1168,8 @@ class Simulation:
             self.scheduled.append([
                 at_time + seething["phantom_delay"],
                 lambda tt: self._apply_onhits(
-                    tt, tag=" (Phantom Hit)"),
+                    tt, tag=" (Phantom Hit)",
+                    attack_is_melee=attack_is_melee),
             ])
             return True
 
@@ -1330,7 +1331,8 @@ class Simulation:
 
     def _apply_onhits(
             self, at_time, tag="", grants_pta=True,
-            defer_terminus_stack=False):
+            defer_terminus_stack=False, *, target_hp=None,
+            attack_is_melee=None):
         """Apply item on-hits, Kayle E passive, and an optional PTA stack.
 
         Dusk & Dawn's repeat and Rageblade's Phantom Hit both grant PTA stacks;
@@ -1338,8 +1340,22 @@ class Simulation:
         Ordinary attack crit chance does not multiply these proc-damage
         instances. Special effects inside ``_deal``, such as Shadowflame's
         magic/true-damage crit, still apply when their conditions are met.
+
+        ``target_hp`` is the target-health snapshot from before a triggering
+        basic attack. Repeated packages omit it and take a fresh snapshot when
+        that package begins. This keeps current-health effects independent of
+        inventory order.
         """
         self._refresh_dynamic_stats(at_time)
+        package_target_hp = max(
+            0.0,
+            min(
+                self.enemy_max_hp,
+                self.enemy_hp if target_hp is None else float(target_hp),
+            ),
+        )
+        package_is_melee = (
+            self.is_melee if attack_is_melee is None else attack_is_melee)
         for k in self.items:
             it = ITEMS[k]
             if "onhit_magic_flat" in it:
@@ -1350,6 +1366,18 @@ class Simulation:
                     at_time,
                     grants_life_steal=it.get(
                         "onhit_applies_life_steal", False),
+                )
+            if "onhit_current_hp" in it:
+                oh = it["onhit_current_hp"]
+                ratio = (
+                    oh["melee_ratio"] if package_is_melee
+                    else oh["ranged_ratio"])
+                self._deal(
+                    package_target_hp * ratio,
+                    oh["damage_type"],
+                    f"{it['name']} — {oh['name']}{tag}",
+                    at_time,
+                    grants_life_steal=oh["applies_life_steal"],
                 )
             if "onhit_magic" in it:
                 oh = it["onhit_magic"]
@@ -1439,6 +1467,8 @@ class Simulation:
         speed = self.attack_speed()   # also snapshots bonus AS % for the bolt
         crit_chance_snapshot = self.crit_chance
         attack_dealt = 0.0
+        onhit_target_hp = self.enemy_hp
+        attack_is_melee = self.is_melee
         self._begin_basic_attack(t)
         self._navori_launch_attack(t)
 
@@ -1462,7 +1492,12 @@ class Simulation:
         # Terminus grants Light/Dark after the complete triggering attack. In
         # particular, Practice Tool shows that attack 2's fire wave still uses
         # zero Dark stacks; attack 3 is the first to use the new penetration.
-        self._apply_onhits(t, defer_terminus_stack=True)
+        self._apply_onhits(
+            t,
+            defer_terminus_stack=True,
+            target_hp=onhit_target_hp,
+            attack_is_melee=attack_is_melee,
+        )
         # 2b. rune on-hit extras
         if (m := self._rune(9923)) and self.hob_stacks > 0:  # HoB true damage
             dmg = (self._lerp(m["true_lo"], m["true_hi"])
@@ -1481,10 +1516,11 @@ class Simulation:
             self._heal(hpct * self.kayle_max_hp, "Grasp heal", t)
             self.grasp_consumed_at = t
         # 4. spellblade proc
-        self._consume_spellblade(t)
+        self._consume_spellblade(
+            t, repeat_attack_is_melee=attack_is_melee)
         self._terminus_hit(t)
         # 5. Rageblade stacking / Phantom Hit
-        self._rageblade_attack(t)
+        self._rageblade_attack(t, attack_is_melee=attack_is_melee)
 
         self._conqueror_heal(attack_dealt, t)
         # Dark Harvest re-check: this attack may have dropped the enemy below 50%
@@ -1532,7 +1568,8 @@ class Simulation:
             self.spellblade_primed_until = cast_at + SPELLBLADE_WINDOW
             self.dd_repeat_used = False
 
-    def _consume_spellblade(self, at_time):
+    def _consume_spellblade(
+            self, at_time, *, repeat_attack_is_melee=None):
         """Consume a primed Spellblade on an attack, including D&D's repeat."""
         self._expire_spellblade(at_time)
         if not (self.spellblade_primed and self.spellblade_key
@@ -1557,7 +1594,8 @@ class Simulation:
         if "heal_ap_ratio" in sb:
             heal = sb["heal_ap_ratio"] * self.ap + sb["heal_bonus_hp_ratio"] * self.bonus_hp
             self._heal(heal, f"{it['name']} Spellblade heal", at_time)
-        self._dd_repeat(at_time)
+        self._dd_repeat(
+            at_time, attack_is_melee=repeat_attack_is_melee)
         self.spellblade_primed = False
         self.spellblade_primed_until = -1.0
         self.spellblade_cd_until = at_time + SPELLBLADE_CD
@@ -1634,10 +1672,11 @@ class Simulation:
 
         Practice Tool isolation on 2026-07-17 established this package:
         physical basic hit, one normal on-hit package, Spellblade damage, and
-        Dusk & Dawn's on-hit repeat. Missing HP is snapshotted before the attack
-        and uses E's AP-scaled percentage. The E explosion itself does not add
-        PTA; Dusk & Dawn's repeat does. All components share the cast frame, so
-        the PTA proc does not amplify the E components which triggered it.
+        Dusk & Dawn's delayed on-hit repeat. Missing HP is snapshotted before
+        the attack and uses E's AP-scaled percentage. The E explosion itself
+        does not add PTA; Dusk & Dawn's repeat does. E's immediate components
+        share the cast frame, so a PTA proc there does not amplify the E
+        components which triggered it.
         """
         rank = self.ranks.get("E", 0)
         if rank == 0:
@@ -1681,6 +1720,7 @@ class Simulation:
         self._yun_tal_launch_attack(t)
         self._energize_launch_attack()
         crit_chance_snapshot = self.crit_chance
+        onhit_target_hp = self.enemy_hp
         self._prime_spellblade(cast_at)
         self.attack_speed()  # snapshot bonus AS for Lethal Tempo's bolt
         self._begin_basic_attack(t)
@@ -1700,7 +1740,15 @@ class Simulation:
         # Without Rageblade, the verified pre-attack snapshot stays unchanged.
         if self.has_rageblade:
             missing_at_cast = max(0.0, self.enemy_max_hp - self.enemy_hp)
-        self._apply_onhits(t, tag=" (E)", defer_terminus_stack=True)
+        self._apply_onhits(
+            t,
+            tag=" (E)",
+            defer_terminus_stack=True,
+            target_hp=onhit_target_hp,
+            # Before Arisen, E explicitly turns this attack into a ranged
+            # 525-range attack; after level 6 Kayle is already ranged.
+            attack_is_melee=False,
+        )
         if self.has_rageblade and phantom_will_proc and timing == "instant":
             missing_at_cast = max(0.0, self.enemy_max_hp - self.enemy_hp)
 
@@ -1722,9 +1770,10 @@ class Simulation:
             self._heal(hpct * self.kayle_max_hp, "Grasp heal", t)
             self.grasp_consumed_at = t
 
-        # E primes and immediately consumes Spellblade. Dusk & Dawn then
-        # repeats normal on-hits once and grants another PTA application.
-        self._consume_spellblade(t)
+        # E primes and immediately consumes Spellblade. Dusk & Dawn schedules
+        # its second on-hit package from this ranged empowered attack.
+        self._consume_spellblade(
+            t, repeat_attack_is_melee=False)
 
         pct = (E["active_missing_hp_pct"][rank - 1]
                + E["active_missing_hp_per100ap"] * self.ap / 100.0) / 100.0
@@ -1742,7 +1791,7 @@ class Simulation:
         if self.level >= PASSIVE["aflame_level"] and exalted:
             self._fire_wave(t)
         self._terminus_hit(t)
-        self._rageblade_attack(t)
+        self._rageblade_attack(t, attack_is_melee=False)
 
         self._conqueror_heal(attack_dealt, t)
         self._dark_harvest(t)
@@ -1757,15 +1806,22 @@ class Simulation:
             1.0 / self.attack_speed()
             if aa_follows else GAME_TICK_SECONDS)
 
-    def _dd_repeat(self, at_time):
-        """Dusk and Dawn's 'applies on-hit effects again' — instant (same
-        frame), once per Spellblade priming, and grants a PTA application.
-        Clean E reaches two stacks; AA into E reaches three and procs PTA."""
+    def _dd_repeat(self, at_time, *, attack_is_melee=None):
+        """Schedule Dusk and Dawn's one delayed on-hit reapplication."""
         if (self.spellblade_key and self.spellblade_primed
                 and ITEMS[self.spellblade_key]["spellblade"].get("repeats_onhits")
                 and not self.dd_repeat_used):
             self.dd_repeat_used = True
-            self._apply_onhits(at_time, tag=" (D&D repeat)")
+            spellblade = ITEMS[self.spellblade_key]["spellblade"]
+            repeat_at = at_time + spellblade.get("repeat_delay", 0.0)
+            self.scheduled.append([
+                repeat_at,
+                lambda tt: self._apply_onhits(
+                    tt,
+                    tag=" (D&D repeat)",
+                    attack_is_melee=attack_is_melee,
+                ),
+            ])
 
     def do_r(self):
         self._refresh_dynamic_stats(self.time)

@@ -17,6 +17,7 @@ const cooldownErrorIndexes = new Set();
 let rankRequestSequence = 0;
 let enemyRequestSequence = 0;
 let previousEnemyMaxHp = 3500;
+let latestShareImage = null;
 
 const MAX_BUILDS = 8;
 const MAX_COMBO_ACTIONS = 100;
@@ -64,12 +65,30 @@ async function requestJson(url, options) {
 }
 
 function showResultsError(message) {
+  clearShareImage();
   const results = $("resultsContainer");
   results.replaceChildren();
   const warning = document.createElement("p");
   warning.className = "warn stale-results";
   warning.textContent = message;
   results.appendChild(warning);
+}
+
+function showShareStatus(message, tone = "") {
+  const status = $("shareStatus");
+  status.textContent = message;
+  status.className = `share-status${tone ? ` ${tone}` : ""}`;
+}
+
+function clearShareImage() {
+  latestShareImage = null;
+  const button = $("shareBtn");
+  if (button) button.disabled = true;
+  const status = $("shareStatus");
+  if (status) {
+    status.textContent = "";
+    status.className = "share-status";
+  }
 }
 
 function markResultsStale() {
@@ -143,8 +162,10 @@ async function init() {
   SHARDS = runeData.shards;
   for (const p of RUNES) {
     PATH_BY_ID[p.id] = p;
-    p.slots.forEach((slot, row) =>
-      slot.forEach((r) => (RUNE_BY_ID[r.id] = { ...r, pathId: p.id, row })));
+    p.slots.forEach((slot, row) => slot.forEach((r) => {
+      const indexedRune = { ...r, pathId: p.id, row };
+      RUNE_BY_ID[r.id] = indexedRune;
+    }));
   }
 
   const presets = bootstrap.enemy_presets;
@@ -212,6 +233,7 @@ async function init() {
     renderCombo();
   });
   $("simulateBtn").addEventListener("click", simulate);
+  $("shareBtn").addEventListener("click", downloadShareImage);
   $("closeOverlayBtn").addEventListener("click", closeOverlay);
   $("clearSlotBtn").addEventListener("click", () => { setSlot(null); });
   $("itemTabs").addEventListener("click", (e) => {
@@ -1264,6 +1286,39 @@ function buildSimulationPayload() {
   };
 }
 
+async function downloadShareImage() {
+  const button = $("shareBtn");
+  const label = button.querySelector(".share-label");
+  if (!latestShareImage) {
+    showShareStatus("Calculate the comparison before sharing.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  label.textContent = "Preparing…";
+  showShareStatus("Creating share image…");
+  try {
+    const blob = await ComparisonSnapshot.createComparisonSnapshot({
+      ...latestShareImage,
+      itemByKey: ITEM_BY_KEY,
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `kayle-calculator-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+    showShareStatus("Share image downloaded.", "success");
+  } catch (error) {
+    showShareStatus(`Could not create image: ${error.message}`, "error");
+  } finally {
+    button.disabled = latestShareImage === null;
+    label.textContent = "Share";
+  }
+}
+
 async function simulate() {
   const btn = $("simulateBtn");
   cooldownErrorIndexes.clear();
@@ -1299,6 +1354,7 @@ async function simulate() {
       });
       renderCombo();
       $("resultsContainer").replaceChildren();
+      clearShareImage();
       const abilities = [...new Set(cooldownErrors.map((error) => error.ability))];
       showCooldownDialog(abilities);
       document.querySelector("#comboTrack .cooldown-error")?.scrollIntoView({
@@ -1308,6 +1364,16 @@ async function simulate() {
       return;
     }
     renderResults(data.results);
+    if (data.results.length) {
+      latestShareImage = {
+        results: data.results,
+        payload: JSON.parse(requestSignature),
+      };
+      $("shareBtn").disabled = false;
+      showShareStatus("Image ready to share.");
+    } else {
+      clearShareImage();
+    }
   } catch (err) {
     showResultsError(`Simulation failed: ${err.message}`);
   } finally {

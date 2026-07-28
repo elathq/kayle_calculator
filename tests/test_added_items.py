@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 from backend.data import ICON_VERSION
@@ -13,6 +14,7 @@ NEW_ITEMS = {
     "kraken_slayer": 6672,
     "terminus": 3302,
     "infinity_edge": 3031,
+    "blade_of_the_ruined_king": 3153,
     "bloodthirster": 3072,
     "bloodletters_curse": 8010,
     "hexoptics_c44": 2523,
@@ -55,6 +57,11 @@ def run(items, combo, *, level=18, enemy=None, ranks=None, options=None):
 class AddedItemTests(unittest.TestCase):
     def test_item_catalog_schema_is_valid(self):
         self.assertTrue(validate_item_catalog())
+        invalid = copy.deepcopy(ITEMS)
+        invalid["blade_of_the_ruined_king"]["onhit_current_hp"][
+            "ranged_ratio"] = "6%"
+        with self.assertRaisesRegex(ValueError, "ranged_ratio"):
+            validate_item_catalog(invalid)
 
     def test_all_added_items_are_in_the_picker_with_current_ids(self):
         api = {item["key"]: item for item in item_list_for_api()}
@@ -94,6 +101,10 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(ITEMS["bloodthirster"]["stats"], {
             "ad": 80, "life_steal": 0.15,
         })
+        self.assertEqual(ITEMS["blade_of_the_ruined_king"]["stats"], {
+            "ad": 40, "attack_speed": 25, "life_steal": 0.10,
+        })
+        self.assertEqual(ITEMS["blade_of_the_ruined_king"]["cost"], 3200)
         self.assertEqual(ITEMS["mortal_reminder"]["stats"], {
             "ad": 35, "armor_pen_pct": 0.30, "crit_chance": 25,
         })
@@ -155,6 +166,231 @@ class AddedItemTests(unittest.TestCase):
         self.assertAlmostEqual(attack["raw"], expected_attack, places=3)
         self.assertEqual(result["stats"]["life_steal"], 15.0)
         self.assertEqual(result["healing"], round(attack["dealt"] * 0.15, 1))
+
+    def test_blade_uses_pre_attack_current_hp_and_melee_ranged_ratios(self):
+        no_ranks = {"Q": 0, "W": 0, "E": 0, "R": 0}
+
+        def mist_hit(level, current_hp):
+            result = run(
+                ["blade_of_the_ruined_king"],
+                [{"type": "AA"}],
+                level=level,
+                ranks=no_ranks,
+                enemy={
+                    "hp": 10_000, "current_hp": current_hp,
+                    "bonus_hp": 0, "armor": 0, "mr": 0,
+                },
+            )
+            basic = next(
+                event for event in result["events"]
+                if event["source"] == "Basic attack"
+            )
+            mist = next(
+                event for event in result["events"]
+                if "Mist's Edge" in event["source"]
+                and event["type"] == "physical"
+            )
+            return basic, mist
+
+        melee_basic, melee_mist = mist_hit(5, 1000)
+        ranged_basic, ranged_mist = mist_hit(6, 1000)
+        _, low_hp_mist = mist_hit(6, 100)
+        _, high_hp_mist = mist_hit(6, 5000)
+
+        self.assertEqual(melee_mist["raw"], 90.0)
+        self.assertEqual(ranged_mist["raw"], 60.0)
+        self.assertEqual(low_hp_mist["raw"], 6.0)
+        self.assertEqual(high_hp_mist["raw"], 300.0)
+        self.assertEqual(
+            melee_mist["raw"], melee_basic["hp_before"] * 0.09)
+        self.assertEqual(
+            ranged_mist["raw"], ranged_basic["hp_before"] * 0.06)
+        self.assertLess(ranged_mist["hp_before"], ranged_basic["hp_before"])
+
+    def test_blade_trigger_matrix_for_kayle_abilities_and_passives(self):
+        enemy = {
+            "hp": 1000, "current_hp": 800, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        pre_arisen_e = run(
+            ["blade_of_the_ruined_king"],
+            [{"type": "E"}],
+            level=5,
+            ranks={"Q": 0, "W": 0, "E": 1, "R": 0},
+            enemy=enemy,
+        )
+        pre_arisen_mist = [
+            event for event in pre_arisen_e["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        ]
+        self.assertEqual(len(pre_arisen_mist), 1)
+        self.assertEqual(pre_arisen_mist[0]["raw"], 48.0)
+
+        aflame_e = run(
+            ["blade_of_the_ruined_king"],
+            [{"type": "E"}],
+            level=11,
+            ranks={"Q": 0, "W": 0, "E": 1, "R": 0},
+            enemy=enemy,
+        )
+        self.assertEqual(sum(
+            "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+            for event in aflame_e["events"]
+        ), 1)
+        self.assertTrue(any(
+            event["source"] == "E passive on-hit (E)"
+            for event in aflame_e["events"]
+        ))
+        self.assertTrue(any(
+            event["source"].startswith("Passive fire wave")
+            for event in aflame_e["events"]
+        ))
+        self.assertTrue(any(
+            event["source"] == "E active (missing HP)"
+            for event in aflame_e["events"]
+        ))
+
+        spells_only = run(
+            ["blade_of_the_ruined_king"],
+            [{"type": "Q"}, {"type": "W"}, {"type": "R"}],
+            level=11,
+            ranks={"Q": 1, "W": 1, "E": 1, "R": 1},
+            enemy=enemy,
+        )
+        self.assertFalse(any(
+            "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+            for event in spells_only["events"]
+        ))
+
+        killing_onhit = run(
+            ["blade_of_the_ruined_king"],
+            [{"type": "AA"}, {"type": "AA"}],
+            level=18,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={
+                "hp": 140, "current_hp": 140, "bonus_hp": 0,
+                "armor": 0, "mr": 0,
+            },
+        )
+        self.assertTrue(killing_onhit["enemy"]["killed"])
+        self.assertEqual(sum(
+            event["source"] == "Basic attack"
+            for event in killing_onhit["events"]
+        ), 1)
+        killing_basic = next(
+            event for event in killing_onhit["events"]
+            if event["source"] == "Basic attack"
+        )
+        killing_mist = next(
+            event for event in killing_onhit["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        )
+        self.assertGreater(killing_basic["hp_after"], 0)
+        self.assertLessEqual(killing_mist["hp_after"], 0)
+
+    def test_blade_proc_does_not_crit_or_gain_hexoptics_basic_damage(self):
+        enemy = {
+            "hp": 5000, "current_hp": 5000, "bonus_hp": 0,
+            "armor": 100, "mr": 0,
+        }
+        no_ranks = {"Q": 0, "W": 0, "E": 0, "R": 0}
+        result = run(
+            [
+                "blade_of_the_ruined_king",
+                "infinity_edge",
+                "hexoptics_c44",
+            ],
+            [{"type": "AA"}],
+            ranks=no_ranks,
+            enemy=enemy,
+        )
+        mist = next(
+            event for event in result["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        )
+        self.assertEqual(mist["raw"], 300.0)
+        self.assertEqual(mist["effective_resistance"], 100.0)
+        self.assertEqual(mist["dealt"], 150.0)
+        self.assertEqual(result["stats"]["life_steal"], 10.0)
+        mist_heal = next(
+            event for event in result["events"]
+            if event["source"].endswith("Mist's Edge life steal")
+        )
+        self.assertEqual(mist_heal["dealt"], 15.0)
+
+        penetrated = run(
+            ["blade_of_the_ruined_king", "mortal_reminder"],
+            [{"type": "AA"}],
+            ranks=no_ranks,
+            enemy=enemy,
+        )
+        penetrated_mist = next(
+            event for event in penetrated["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        )
+        self.assertEqual(penetrated_mist["raw"], 300.0)
+        self.assertEqual(penetrated_mist["effective_resistance"], 70.0)
+
+    def test_dusk_and_dawn_repeats_blade_after_point_two_seconds(self):
+        result = run(
+            ["blade_of_the_ruined_king", "dusk_and_dawn"],
+            [{"type": "Q"}, {"type": "AA"}],
+            ranks={"Q": 1, "W": 0, "E": 0, "R": 0},
+            enemy={
+                "hp": 10_000, "current_hp": 10_000, "bonus_hp": 0,
+                "armor": 0, "mr": 0,
+            },
+        )
+        basics = [
+            event for event in result["events"]
+            if event["source"] == "Basic attack"
+        ]
+        mist = [
+            event for event in result["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        ]
+        self.assertEqual(len(mist), 2)
+        self.assertEqual(mist[0]["raw"], basics[0]["hp_before"] * 0.06)
+        self.assertAlmostEqual(mist[1]["t"] - mist[0]["t"], 0.20, places=3)
+        self.assertAlmostEqual(
+            mist[1]["raw"], mist[1]["hp_before"] * 0.06, places=3)
+        self.assertLess(mist[1]["raw"], mist[0]["raw"])
+
+    def test_rageblade_phantom_hit_repeats_blade_from_live_hp(self):
+        result = run(
+            ["blade_of_the_ruined_king", "guinsoos_rageblade"],
+            [{"type": "AA"}] * 3,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={
+                "hp": 10_000, "current_hp": 10_000, "bonus_hp": 0,
+                "armor": 0, "mr": 0,
+            },
+            options={"pre_stacked_rageblade": True},
+        )
+        mist = [
+            event for event in result["events"]
+            if "Mist's Edge" in event["source"]
+            and event["type"] == "physical"
+        ]
+        self.assertEqual(len(mist), 4)
+        phantom = next(
+            event for event in mist
+            if "Phantom Hit" in event["source"]
+        )
+        triggering = [
+            event for event in mist
+            if "Phantom Hit" not in event["source"]
+        ][-1]
+        self.assertAlmostEqual(phantom["t"] - triggering["t"], 0.15, places=3)
+        self.assertAlmostEqual(
+            phantom["raw"], phantom["hp_before"] * 0.06, places=3)
 
     def test_mortal_reminder_applies_expected_crit_and_armor_penetration(self):
         level = 1

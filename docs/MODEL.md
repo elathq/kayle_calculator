@@ -34,6 +34,11 @@ The engine evaluates the entered sequence and records invalid Q/W/E/R casts in
 `cooldown_errors`. The UI blocks the result, shows an ability-readiness popup,
 and outlines every invalid sequence action in red.
 
+PNG share images are presentation artifacts created from the exact request and
+successful response held by the browser. They do not feed values back into the
+engine or persist simulation data. Any setup edit invalidates the stored pair
+before another image can be created.
+
 The AA, ability, or item active that reduces the target to zero HP finishes its
 complete synchronous damage package. The engine then stops: later entered
 actions and unresolved delayed effects do not damage or add events to the dead
@@ -182,7 +187,9 @@ cast time = 0 s
 
 E is one empowered basic attack and attack reset. It includes the physical hit,
 one normal on-hit package, and the active missing-health damage. It primes and
-may consume Spellblade.
+may consume Spellblade. Before level 6, E explicitly turns its attack into a
+ranged 525-range attack, so melee/ranged item effects use their ranged branch;
+an ordinary pre-level-6 attack remains melee.
 
 The shared **Use E for AA cancel** condition controls the timing only when an E
 directly follows an AA:
@@ -385,6 +392,7 @@ Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
 Magical Footwear      = +10 flat MS to equipped Boots
 
 Gunmetal life-steal rate = 5%
+Blade of the Ruined King life-steal rate = 10%
 Bloodthirster life-steal rate = 15%
 life-steal healing = life-steal rate * post-mitigation eligible damage
 ```
@@ -411,6 +419,7 @@ shared Spellblade priming window = 10 s
 Dusk and Dawn raw magic = 0.75 * base AD + 0.10 * AP
 Dusk and Dawn heal      = 0.10 * AP + 0.03 * bonus HP
 Dusk and Dawn           = repeat eligible on-hits once
+Dusk and Dawn repeat delay = 0.20 s
 
 Lich Bane raw magic = 0.75 * base AD + 0.45 * AP
 Lich Bane primed AS = +50%
@@ -423,17 +432,49 @@ Essence Reaver flat crit term = 0..50 at 0%..100% total crit
 Nashor's Tooth raw magic = 15 + 0.15 * AP
 Wit's End raw magic      = 45
 Rageblade raw magic      = 30
+
+Blade of the Ruined King raw physical
+  = target current HP * 0.09 while melee
+  = target current HP * 0.06 while ranged
 ```
+
+Mist's Edge takes a fresh target-current-HP snapshot for the original attack
+and for every legitimate repeated package. The original attack uses HP from
+before its basic physical damage even though the audit timeline lists the
+physical hit first. There is no artificial 15-damage floor and no champion
+damage cap. Mist's Edge does not naturally crit or receive Hexoptics'
+basic-damage modifier; armor and armor penetration still apply.
 
 An eligible ability cast primes Spellblade for 10 seconds. Another eligible
 cast while it is primed refreshes that expiry; an eligible attack consumes the
-proc and starts the shared cooldown.
+proc and starts the shared cooldown. Dusk and Dawn schedules its second
+on-hit package 0.20 seconds after the empowered attack.
 
 Life steal always applies to the basic attack's post-mitigation physical
-damage. The current Wiki additionally marks Rageblade's Wrath, Kraken Slayer's
-Bring It Down, Terminus' Shadow, Wit's End's Fray, and Spellblade bonus damage
-from Dusk and Dawn, Lich Bane, and Essence Reaver as life-steal-applying item
-damage. Phantom Hit repeats of eligible on-hit damage apply life steal again.
+damage. The current Wiki additionally marks Blade of the Ruined King's Mist's
+Edge, Rageblade's Wrath, Kraken Slayer's Bring It Down, Terminus' Shadow,
+Wit's End's Fray, and Spellblade bonus damage from Dusk and Dawn, Lich Bane,
+and Essence Reaver as life-steal-applying item damage. Delayed repeats of
+eligible on-hit damage apply life steal again.
+
+The single-target on-hit trigger matrix is:
+
+| Event | Creates or repeats an item on-hit package? |
+|---|---|
+| Ordinary basic attack | Yes, once. |
+| E empowered basic attack | Yes, once. |
+| Dusk and Dawn repeat | Yes, once at +0.20 s. |
+| Rageblade Phantom Hit | Yes, once at +0.15 s. |
+| Passive fire wave | No. |
+| E passive magic on-hit | No; it is payload inside the package. |
+| E active missing-health damage | No. |
+| Q, W, R, or an item active | No. |
+
+One package can contain Mist's Edge, Nashor's Tooth, Rageblade's Wrath,
+Terminus' Shadow, Wit's End, eligible Kraken or Energized effects, Kayle's E
+passive, and a PTA application. A repeat does not copy the basic physical hit,
+fire wave, Spellblade damage, E active damage, or on-attack-only rune effects.
+Clawing Shadows only slows, so it adds no damage event to this model.
 
 Rageblade cadence:
 

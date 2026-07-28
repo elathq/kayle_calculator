@@ -18,11 +18,11 @@ remaining gaps. Implemented formulas are not repeated here; see the
 ## Current status
 
 ```text
-documentation review       = 2026-07-26
+documentation review       = 2026-07-28
 fixture asset version      = Data Dragon 16.14.1
 live Wiki rules patch      = 26.14
 original capture patch     = confirmation pending
-automated suite            = 115 passing tests
+automated suite            = 120 Python + 3 frontend passing tests
 ```
 
 | Area | Status |
@@ -31,7 +31,9 @@ automated suite            = 115 passing tests
 | Q, resistance order, penetration, Shadowflame crit | Practice Tool-confirmed |
 | Rageblade E snapshot and fast-reset ordering | Practice Tool-confirmed |
 | Rageblade durations and Phantom Hit cadence | Patch 26.14 source-confirmed; prior attack-7 capture superseded |
-| R, Gunblade, Lich Bane, Dusk and Dawn | Practice Tool-confirmed |
+| R, Gunblade, Lich Bane | Practice Tool-confirmed |
+| Dusk and Dawn repeat timing | Patch 26.14 source-confirmed; fresh exact-total isolation needed |
+| Blade of the Ruined King | Patch 26.14 source-confirmed and regression-tested |
 | Selected extended-combat and Energized items | Practice Tool-confirmed |
 | Last Stand | Source-confirmed |
 | W, Swiftmarch, boots, starters, progression | Source-confirmed and regression-tested |
@@ -181,14 +183,18 @@ Q -> AA -> AA -> AA -> E
 Practice Tool total      = 4500
 simulator before fix     = 4708.73
 second simulated PTA     = 179.38
-simulator after fix      = 4529.36
-difference after fix     = +0.65%
+legacy same-frame model  = 4529.36
+current 0.20 s model     = 4181.31
+current difference       = -7.08%
 ```
 
 The first Dusk and Dawn repeat helps reach the initial PTA trigger on the
 second basic attack. Once PTA is active, the third attack, E, and E's repeated
 on-hit package do not build or trigger PTA again. Its 8% outgoing amplifier
-continues to affect later frames.
+continues to affect later frames. The live Wiki now explicitly places Dusk and
+Dawn's repeat 0.20 seconds after the triggering attack. The historical
+Practice Tool total was captured without a recorded patch, so it is preserved
+but is no longer the exact regression target; this case needs a fresh capture.
 
 ### Fire wave and top-quest levels
 
@@ -403,11 +409,11 @@ fast DPS    = 2660.2
 setup    = level 12, Nashor's, Dusk and Dawn, Rabadon's, Fleet
 sequence = Q -> AA -> immediate E
 
-HP after Q             = 3320
-HP after Spellblade AA = 3038
-final HP               = 2864
-dummy total            = 637
-exact total            = 636.70
+HP after Q                 = 3320
+historical dummy total     = 637
+current exact total        = 628.72
+current final HP           = 2871.28
+current difference         = -1.30%
 Spellblade cooldown    = 1.5 s
 
 controlled 0.5 s waits:
@@ -420,7 +426,10 @@ non-reproduced captures:
 ```
 
 The immediate E occurs inside the Spellblade cooldown, so only the first attack
-consumes the proc. Non-reproduced totals are excluded.
+consumes the proc. The delayed repeat can land after E and therefore changes
+E's missing-health snapshot relative to the former same-frame model. The
+cooldown conclusion remains covered; the exact total needs a fresh capture.
+Non-reproduced totals are excluded.
 
 ### Lich Bane
 
@@ -844,11 +853,38 @@ that Rageblade, Kraken, Terminus, and Wit's End on-hit damage, plus Essence
 Reaver's Spellblade, benefit from life steal. These remain source-confirmed
 until isolated in the Practice Tool.
 
+### Blade of the Ruined King
+
+The 2026-07-28 live Wiki and pinned Data Dragon review established 40 AD, 25%
+attack speed, 10% life steal, and a 9% melee / 6% ranged current-health
+physical on-hit. The Wiki Notes place the current-HP read before the triggering
+basic attack's damage, exclude natural crit, and mark Mist's Edge as
+life-steal-applying proc damage.
+
+Regression cases prove:
+
+- Level-5 ordinary attacks use 9%; level-6 attacks use 6%.
+- A pre-level-6 E uses its temporary ranged classification and the 6% branch.
+- Low-HP champion damage has no artificial 15-damage floor, while high-HP
+  champion damage is not capped at 100.
+- Armor and armor penetration apply; natural crit and Hexoptics basic-damage
+  amplification do not.
+- AA and E each create one package. Q, W, R, the fire wave, E passive damage,
+  and E active damage do not recursively create another package.
+- Dusk and Dawn repeats Mist's Edge at +0.20 seconds and Rageblade Phantom Hit
+  repeats it at +0.15 seconds; each repeat reads then-live target HP and applies
+  life steal again.
+
+Clawing Shadows' third-hit slow has no outgoing damage, so it remains
+display-only. A controlled Practice Tool capture is still needed before these
+cases move from source-confirmed to Practice Tool-confirmed.
+
 ```text
 source-confirmed examples:
   Cosmic Drive
   Stormsurge
   Infinity Edge
+  Blade of the Ruined King
   Bloodthirster
   Hexoptics C44
   Phantom Dancer
@@ -863,18 +899,20 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 115 passing
+maintained automated tests = 120 Python + 3 frontend passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,
 baseline fixture, E snapshots, Rageblade timing, runes, movement layers,
 progression, item restrictions, item IDs, delayed effects, expected crit, and
-post-R timelines.
+post-R timelines. Frontend coverage verifies the PNG share-image model, leader
+badges, layout sizing, numeric formatting, and invalid input handling.
 
 Run without creating cache files:
 
 ```text
 python -B -m unittest discover -s tests -v
+node --test tests_js/snapshot.test.js
 ```
 
 ## Remaining validation limits

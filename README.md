@@ -20,6 +20,7 @@ code transparency, and review of the simulator's formulas and evidence.
 ## What it provides
 
 - Side-by-side build comparison with independent items, runes, and shards.
+- Downloadable PNG share images for the current build comparison.
 - Item selection grouped into Starter Item, Boots, AP, and AD tabs.
 - A drag-and-drop attack, ability, and item-active sequence.
 - Combo execution stops after the AA, ability, or item active that kills the
@@ -37,6 +38,17 @@ builds              <= 8
 items per build     <= 6
 combo actions       <= 100
 ```
+
+## Share images
+
+After a successful calculation, the **Share** button downloads a compact PNG
+styled like the calculator's result cards. It includes Kayle's level and
+ranks, the target, combo, item icons, damage KPIs, damage composition, core
+combat stats, and remaining target HP.
+
+The image is rendered locally in the browser. No comparison data is uploaded
+or stored in a database, and the share action is disabled as soon as the
+setup changes so an image cannot silently mix old results with new inputs.
 
 ## Core calculations
 
@@ -170,10 +182,10 @@ Evidence labels:
 Documentation snapshot:
 
 ```text
-review date                    = 2026-07-26
+review date                    = 2026-07-28
 local Riot asset set           = Data Dragon 16.14.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 115 passing
+automated tests                = 120 Python + 3 frontend passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -203,7 +215,9 @@ directory, run:
 python -m compileall -q backend tests validation tools
 python -B -m unittest discover -s tests -v
 python -B validation/backtest.py
+node --check frontend/snapshot.js
 node --check frontend/app.js
+node --test tests_js/snapshot.test.js
 ```
 
 The `Verify` GitHub Actions workflow runs the same checks on pushes and pull
@@ -222,14 +236,16 @@ requests so engine, documentation, and frontend changes are reviewed together.
 | `backend/item_rules.py` | Shared item-build legality rules and UI metadata. |
 | `backend/main.py` | HTTP server, API validation, and static files. |
 | `frontend/` | Browser interface and local icons. |
+| `frontend/snapshot.js` | Dependency-free PNG snapshot model and renderer. |
 | `tests/` | Automated regressions. |
+| `tests_js/` | Dependency-free frontend snapshot regressions. |
 | `validation/` | Machine-readable Practice Tool fixture and backtest. |
 | `tools/` | Optional maintenance utilities. |
 
 Catalog snapshot:
 
 ```text
-selectable items = 44
+selectable items = 45
 ```
 
 ## Public-hosting safeguards

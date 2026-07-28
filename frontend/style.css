@@ -107,7 +107,7 @@ button { color: inherit; }
   outline-offset: 2px;
 }
 
-.header-actions { justify-self: end; gap: 0; }
+.header-actions { justify-self: end; gap: 8px; }
 
 .simulate-btn, .secondary-btn, .text-btn, .close-btn {
   border: 0;
@@ -407,6 +407,21 @@ select:focus, input:focus {
   font-weight: 650;
 }
 .secondary-btn:hover { border-color: var(--line-bright); background: var(--surface-raised); color: var(--text); }
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.share-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
 .clear-btn {
   border-color: var(--line-bright);
   color: var(--text-soft);
@@ -632,10 +647,19 @@ select:focus, input:focus {
 .results-section { padding-top: 4px; }
 .results-heading {
   justify-content: flex-start;
-  gap: 0;
+  gap: 12px;
   margin-bottom: 4px;
   padding: 0 2px;
 }
+.share-status {
+  min-height: 16px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+.share-status.success { color: var(--success); }
+.share-status.error { color: #e69a9a; }
 .results-accuracy-note {
   max-width: 920px;
   margin: 0 2px 12px;
@@ -1259,7 +1283,7 @@ details.breakdown summary {
   }
   .brand h1 { font-size: 16px; }
   .github-link { grid-column: 1 / -1; grid-row: 2; }
-  .header-actions { grid-column: 2; grid-row: 1; margin-left: 0; }
+  .header-actions { grid-column: 2; grid-row: 1; gap: 6px; margin-left: 0; }
   .simulate-btn { min-width: 0; padding: 7px 11px; font-size: 12px; }
   .layout { padding: 16px 12px 48px; }
   /* The tablet grid uses align-items:start. Reset it when this becomes a
@@ -1295,6 +1319,15 @@ details.breakdown summary {
 
 @media (max-width: 390px) {
   .brand h1 { max-width: 150px; }
+  .share-btn { padding-inline: 8px; }
+  .share-btn .share-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .enemy-grid { grid-template-columns: 1fr 1fr; }
   .item-grid { grid-template-columns: 1fr; }
   .rune-opt { width: 58px; }

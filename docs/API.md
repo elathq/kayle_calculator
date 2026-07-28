@@ -53,6 +53,7 @@ Use the value from the `key` column inside `builds[].items`.
 | `kraken_slayer` | Kraken Slayer | — |
 | `terminus` | Terminus | — |
 | `infinity_edge` | Infinity Edge | — |
+| `blade_of_the_ruined_king` | Blade of the Ruined King | — |
 | `bloodthirster` | Bloodthirster | — |
 | `bloodletters_curse` | Bloodletter's Curse | — |
 | `hexoptics_c44` | Hexoptics C44 | — |

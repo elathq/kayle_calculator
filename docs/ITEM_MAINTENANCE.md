@@ -29,6 +29,7 @@ scope belong in the [simulation model](MODEL.md).
 | Stats-only new item | No |
 | Flat magic on-hit | No |
 | Flat + AP-scaling magic on-hit | No |
+| Melee/ranged current-HP on-hit | No |
 | Existing generic Spellblade formula | No |
 | Existing damage or stasis active shape | No |
 | Passive that does not affect champion damage | No; describe it in `passive_text` |
@@ -159,6 +160,31 @@ explicitly classifies that item's damage as life-steal applying.
 },
 ```
 
+### Melee/ranged current-HP on-hit
+
+```python
+"new_current_hp_onhit_item": {
+    "id": 1234,
+    "name": "New Current-HP Item",
+    "cost": 3000,
+    "stats": {"ad": 40, "attack_speed": 25},
+    "tags": [],
+    "passive_text": "Attacks deal current-health physical damage on-hit.",
+    "onhit_current_hp": {
+        "name": "Displayed Effect Name",
+        "damage_type": "physical",
+        "melee_ratio": 0.09,
+        "ranged_ratio": 0.06,
+        "applies_life_steal": True,
+    },
+},
+```
+
+The ratios use 0–1 fractions. The triggering basic attack supplies its
+pre-attack target-HP snapshot; Dusk and Dawn and Rageblade each take a new
+snapshot when their delayed repeat begins. Do not add a minimum or cap unless
+the current champion-target rule explicitly has one.
+
 ### Generic Spellblade
 
 `spellblade` must also appear in `tags`. Only one Spellblade item can be used
@@ -178,6 +204,7 @@ in a build.
         "damage_type": "magic",
         "applies_life_steal": True,
         "repeats_onhits": False,
+        # Add "repeat_delay": 0.20 when repeats_onhits is True.
     },
 },
 ```

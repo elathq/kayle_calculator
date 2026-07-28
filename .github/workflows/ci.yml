@@ -36,4 +36,9 @@ jobs:
         run: python -B validation/backtest.py
 
       - name: Check frontend JavaScript syntax
-        run: node --check frontend/app.js
+        run: |
+          node --check frontend/snapshot.js
+          node --check frontend/app.js
+
+      - name: Test snapshot model
+        run: node --test tests_js/snapshot.test.js

@@ -28,6 +28,7 @@ ICON_CDN = "https://cdn.communitydragon.org/latest/item/{id}"
 # Supported reusable damage fields also require NO engine.py change:
 #   onhit_magic_flat: 45.0
 #   onhit_magic: {"flat": 15.0, "ap_ratio": 0.15}
+#   onhit_current_hp: {...}
 #   spellblade: {...}
 #   active: {...}
 #
@@ -44,7 +45,7 @@ SUPPORTED_STAT_KEYS = {
 # These effect shapes are reusable for newly added items without engine edits.
 GENERIC_EFFECT_FIELDS = {
     "onhit_magic_flat", "onhit_magic", "onhit_applies_life_steal",
-    "spellblade", "active",
+    "onhit_current_hp", "spellblade", "active",
 }
 
 # These are custom mechanics. Their numbers are still edited in this file. A
@@ -190,13 +191,14 @@ ITEMS = {
         "passive_text": (
             "Spellblade: after an ability, next basic attack within 10s deals "
             "75% base AD (+10% AP) bonus magic damage that applies life steal, "
-            "heals for 10% AP (+3% bonus HP), and immediately applies on-hit "
-            "effects again (1.5s cooldown)."),
+            "heals for 10% AP (+3% bonus HP), and applies on-hit effects again "
+            "after 0.2 seconds (1.5s cooldown)."),
         "spellblade": {
             "base_ad_ratio": 0.75, "ap_ratio": 0.10,
             "heal_ap_ratio": 0.10, "heal_bonus_hp_ratio": 0.03,
             "applies_life_steal": True,
             "repeats_onhits": True,
+            "repeat_delay": 0.20,
         },
     },
     "guinsoos_rageblade": {
@@ -424,6 +426,27 @@ ITEMS = {
         "passive_text": (
             "75 attack damage, 25% critical strike chance, and 30% critical "
             "strike damage. Random crits use expected damage in the simulator."),
+    },
+    "blade_of_the_ruined_king": {
+        "id": 3153,
+        "name": "Blade of the Ruined King",
+        "cost": 3200,
+        "stats": {"ad": 40, "attack_speed": 25, "life_steal": 0.10},
+        "tags": [],
+        "passive_text": (
+            "Mist's Edge: basic attacks deal physical damage on-hit equal to "
+            "9% of the target's current HP while melee or 6% while ranged. "
+            "The proc reads HP before the triggering attack, does not crit, "
+            "and applies life steal. Pre-level-6 E uses the ranged value. "
+            "Clawing Shadows' third-hit slow adds no damage and is not shown "
+            "in the timeline."),
+        "onhit_current_hp": {
+            "name": "Mist's Edge",
+            "damage_type": "physical",
+            "melee_ratio": 0.09,
+            "ranged_ratio": 0.06,
+            "applies_life_steal": True,
+        },
     },
     "bloodthirster": {
         "id": 3072,
@@ -731,6 +754,34 @@ def validate_item_catalog(items=None):
                     or "ap_ratio" not in onhit:
                 raise ValueError(
                     f"{label}.onhit_magic needs flat and ap_ratio")
+
+        if "onhit_current_hp" in item:
+            onhit = item["onhit_current_hp"]
+            required_onhit = {
+                "name", "damage_type", "melee_ratio", "ranged_ratio",
+                "applies_life_steal",
+            }
+            if not isinstance(onhit, dict) \
+                    or set(onhit) != required_onhit:
+                raise ValueError(
+                    f"{label}.onhit_current_hp needs exactly "
+                    f"{sorted(required_onhit)}")
+            if not isinstance(onhit["name"], str) or not onhit["name"]:
+                raise ValueError(
+                    f"{label}.onhit_current_hp.name must be non-empty text")
+            if onhit["damage_type"] not in {"physical", "magic", "true"}:
+                raise ValueError(
+                    f"{label}.onhit_current_hp.damage_type is unsupported")
+            for ratio_key in ("melee_ratio", "ranged_ratio"):
+                ratio = onhit[ratio_key]
+                if not isinstance(ratio, (int, float)) or ratio < 0:
+                    raise ValueError(
+                        f"{label}.onhit_current_hp.{ratio_key} must be a "
+                        "non-negative number")
+            if not isinstance(onhit["applies_life_steal"], bool):
+                raise ValueError(
+                    f"{label}.onhit_current_hp.applies_life_steal must be "
+                    "boolean")
 
     return True
 

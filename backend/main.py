@@ -58,6 +58,7 @@ def frontend_asset_version():
         for path in (
             FRONTEND / "style.css",
             FRONTEND / "app.js",
+            FRONTEND / "snapshot.js",
             FRONTEND.parent / "backend" / "data" / "__init__.py",
             FRONTEND.parent / "backend" / "data" / "items_data.py",
             FRONTEND.parent / "backend" / "data" / "runes_data.py",

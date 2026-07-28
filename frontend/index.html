@@ -24,6 +24,15 @@
     <span>by @elathq</span>
   </a>
   <div class="header-actions">
+    <button id="shareBtn" class="secondary-btn share-btn" type="button"
+            title="Download a shareable comparison image" disabled>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 10.5V1.5"></path>
+        <path d="m4.5 5 3.5-3.5L11.5 5"></path>
+        <path d="M3 8.5v4.25c0 .97.78 1.75 1.75 1.75h6.5c.97 0 1.75-.78 1.75-1.75V8.5"></path>
+      </svg>
+      <span class="share-label">Share</span>
+    </button>
     <button id="simulateBtn" class="simulate-btn">Calculate</button>
   </div>
 </header>
@@ -150,6 +159,8 @@
     <section class="results-section">
       <div class="results-heading">
         <h2>Results</h2>
+        <span id="shareStatus" class="share-status"
+              role="status" aria-live="polite"></span>
       </div>
       <p class="results-accuracy-note">
         Results are typically more than 99% accurate. Differences of up to 1% may occur because of known in-game inconsistencies, including Kayle damage varying slightly with target distance. These small variances do not represent a different combo execution and do not materially change the damage discrepancy between builds; the simulator will still reliably identify which build has the higher damage output.
@@ -213,6 +224,7 @@
   </div>
 </div>
 
+<script src="snapshot.js?v=__DEPLOY_VERSION__"></script>
 <script src="app.js?v=__DEPLOY_VERSION__"></script>
 </body>
 </html>
