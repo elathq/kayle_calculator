@@ -28,7 +28,7 @@ scope belong in the [simulation model](MODEL.md).
 | AD, AP, AS, HP, haste, resistances, penetration, movement speed, crit, tenacity, or omnivamp | No |
 | Stats-only new item | No |
 | Flat magic on-hit | No |
-| Flat + AP-scaling magic on-hit | No |
+| Flat + AP/bonus-AD-scaling magic on-hit | No |
 | Melee/ranged current-HP on-hit | No |
 | Existing generic Spellblade formula | No |
 | Existing damage or stasis active shape | No |
@@ -108,6 +108,7 @@ magic_pen_pct: 0.30 = 30% magic penetration
 omnivamp: 0.10      = 10% omnivamp
 life_steal: 0.05    = 5% life steal
 ap_ratio: 0.15      = 15% AP scaling
+bonus_ad_ratio: 0.10 = 10% bonus AD scaling
 ```
 
 The server validates these names at startup. A typo such as `attackspeed` now
@@ -146,7 +147,7 @@ produces a readable error instead of silently contributing zero.
 Omit `onhit_applies_life_steal` or set it to `False` unless the current source
 explicitly classifies that item's damage as life-steal applying.
 
-### Flat plus AP-scaling magic on-hit
+### Flat plus AP/bonus-AD-scaling magic on-hit
 
 ```python
 "new_scaling_onhit_item": {
@@ -155,10 +156,18 @@ explicitly classifies that item's damage as life-steal applying.
     "cost": 3000,
     "stats": {"ap": 80, "attack_speed": 50},
     "tags": [],
-    "passive_text": "Attacks deal 15 (+15% AP) bonus magic damage.",
-    "onhit_magic": {"flat": 15.0, "ap_ratio": 0.15},
+    "passive_text": "Attacks deal 15 (+15% AP) (+10% bonus AD) magic damage.",
+    "onhit_magic": {
+        "flat": 15.0,
+        "ap_ratio": 0.15,
+        "bonus_ad_ratio": 0.10,
+    },
 },
 ```
+
+`bonus_ad_ratio` is optional and defaults to zero. Keep `ap_ratio` present
+even when it is zero so every generic scaling on-hit has one predictable
+shape.
 
 ### Melee/ranged current-HP on-hit
 

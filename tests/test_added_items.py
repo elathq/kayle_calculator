@@ -63,6 +63,17 @@ class AddedItemTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ranged_ratio"):
             validate_item_catalog(invalid)
 
+        invalid = copy.deepcopy(ITEMS)
+        invalid["terminus"]["onhit_magic"]["bonus_ad_ratio"] = "10%"
+        with self.assertRaisesRegex(ValueError, "bonus_ad_ratio"):
+            validate_item_catalog(invalid)
+
+        invalid = copy.deepcopy(ITEMS)
+        invalid["hexoptics_c44"]["magnification"][
+            "assumed_distance_units"] = -1
+        with self.assertRaisesRegex(ValueError, "assumed_distance_units"):
+            validate_item_catalog(invalid)
+
     def test_all_added_items_are_in_the_picker_with_current_ids(self):
         api = {item["key"]: item for item in item_list_for_api()}
         for key, item_id in NEW_ITEMS.items():
@@ -93,8 +104,9 @@ class AddedItemTests(unittest.TestCase):
             "ad": 50, "ability_haste": 20, "crit_chance": 25,
         })
         self.assertEqual(ITEMS["yun_tal_wildarrows"]["stats"], {
-            "ad": 50, "attack_speed": 40, "crit_chance": 0,
+            "ad": 50, "attack_speed": 45, "crit_chance": 0,
         })
+        self.assertEqual(ITEMS["yun_tal_wildarrows"]["cost"], 3000)
         self.assertEqual(ITEMS["navori_flickerblade"]["stats"], {
             "attack_speed": 40, "crit_chance": 25, "move_speed_pct": 4,
         })
@@ -412,24 +424,26 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(result["stats"]["armor_pen_pct"], 30.0)
         self.assertEqual(result["stats"]["crit_chance"], 25.0)
 
-    def test_hexoptics_uses_current_50_unit_scaling_and_500_unit_cap(self):
+    def test_hexoptics_uses_fixed_midpoint_target_distance(self):
         magnification = ITEMS["hexoptics_c44"]["magnification"]
         self.assertAlmostEqual(magnification["amp_per_unit"], 0.01 / 50.0)
         self.assertEqual(magnification["max_amp"], 0.10)
+        self.assertEqual(magnification["assumed_distance_units"], 250.0)
 
-        level = 10  # ranged Kayle: 525 range reaches the current 500-unit cap
-        result = run(
-            ["hexoptics_c44"], [{"type": "AA"}], level=level,
-            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
-            enemy={"hp": 5000, "armor": 0, "mr": 0},
-        )
-        event = next(e for e in result["events"] if e["type"] == "physical")
-        total_ad = kayle_stats_at(level)["base_ad"] + 55
-        self.assertAlmostEqual(event["raw"], total_ad * 1.25 * 1.10, places=3)
+        # The 250-unit midpoint contributes 5% at every passive stage.
+        for level in (5, 10, 16):
+            result = run(
+                ["hexoptics_c44"], [{"type": "AA"}], level=level,
+                ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+                enemy={"hp": 5000, "armor": 0, "mr": 0},
+            )
+            event = next(
+                e for e in result["events"] if e["type"] == "physical")
+            total_ad = kayle_stats_at(level)["base_ad"] + 55
+            self.assertAlmostEqual(
+                event["raw"], total_ad * 1.25 * 1.05, places=3)
 
-    def test_rapid_firecannon_extends_hexoptics_range_only_while_energized(self):
-        # Melee Kayle has 175 range: 3.5% Magnification normally and 4.725%
-        # on RFC's 236.25-range Energized attack.
+    def test_rapid_firecannon_does_not_change_fixed_hexoptics_distance(self):
         level = 5
         result = run(
             ["hexoptics_c44", "rapid_firecannon"],
@@ -441,9 +455,9 @@ class AddedItemTests(unittest.TestCase):
         total_ad = kayle_stats_at(level)["base_ad"] + 55
         expected_crit = 1 + 0.50 * (KAYLE_AS["crit_damage"] - 1)
         self.assertAlmostEqual(
-            basics[0]["raw"], total_ad * expected_crit * 1.04725, places=3)
+            basics[0]["raw"], total_ad * expected_crit * 1.05, places=3)
         self.assertAlmostEqual(
-            basics[1]["raw"], total_ad * expected_crit * 1.035, places=3)
+            basics[1]["raw"], total_ad * expected_crit * 1.05, places=3)
 
     def test_hexoptics_amplifies_kraken_basic_damage(self):
         level = 10
@@ -473,7 +487,7 @@ class AddedItemTests(unittest.TestCase):
         expected = (
             ranged_level_10_base
             * (1.0 + 0.75 * missing_fraction)
-            * 1.10
+            * 1.05
         )
         self.assertAlmostEqual(proc["raw"], expected, places=3)
 
@@ -605,7 +619,7 @@ class AddedItemTests(unittest.TestCase):
         )
         onhits = [e for e in result["events"] if e["source"] == "Terminus on-hit"]
         self.assertEqual(len(onhits), 7)
-        self.assertTrue(all(e["raw"] == 30.0 for e in onhits))
+        self.assertTrue(all(e["raw"] == 33.0 for e in onhits))
 
         practice = run(
             ["terminus"], [{"type": "AA"}] * 7,
@@ -618,14 +632,32 @@ class AddedItemTests(unittest.TestCase):
         )
         self.assertEqual(practice["stats"]["total_ad"], 127.9)
         self.assertEqual(practice["stats"]["attack_speed_final"], 1.315)
-        self.assertEqual(practice["total_damage"], 904.15)
-        self.assertEqual(practice["enemy"]["remaining_hp"], 2595.85)
+        self.assertEqual(practice["total_damage"], 917.43)
+        self.assertEqual(practice["enemy"]["remaining_hp"], 2582.57)
         basics = [e for e in practice["events"]
                   if e["source"] == "Basic attack"]
         self.assertEqual(
             [e["effective_resistance"] for e in basics],
             [100.0, 100.0, 90.0, 90.0, 80.0, 80.0, 70.0],
         )
+
+    def test_terminus_scaling_does_not_change_nashor_onhit(self):
+        result = run(
+            ["terminus", "nashors_tooth"],
+            [{"type": "AA"}],
+            level=10,
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 0},
+            enemy={"hp": 5000, "current_hp": 5000, "bonus_hp": 0,
+                   "armor": 0, "mr": 0},
+        )
+        terminus = next(
+            event for event in result["events"]
+            if event["source"] == "Terminus on-hit")
+        nashor = next(
+            event for event in result["events"]
+            if event["source"] == "Nashor's Tooth on-hit")
+        self.assertEqual(terminus["raw"], 41.0)
+        self.assertEqual(nashor["raw"], 27.0)
 
     def test_bloodletter_reduces_mr_after_each_eligible_cast_instance(self):
         result = run(["bloodletters_curse"], [{"type": "AA"}] * 4)
@@ -1074,7 +1106,7 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(sim.haste, 5.0)
         self.assertAlmostEqual(
             sim.total_ad,
-            kayle_stats_at(level)["base_ad"] + 50.0 + 3.6,
+            kayle_stats_at(level)["base_ad"] + 50.0 + 4.8,
             places=4,
         )
 
@@ -1208,6 +1240,27 @@ class AddedItemTests(unittest.TestCase):
             self.assertAlmostEqual(hit["raw"], expected_true, places=4)
             self.assertAlmostEqual(hit["dealt"], expected_true, places=4)
         self.assertEqual(result["stats"]["ultimate_haste"], 30.0)
+
+    def test_hexoptics_midpoint_amplifies_fiendhunter_true_damage(self):
+        result = run(
+            ["fiendhunter_bolts", "hexoptics_c44"],
+            [{"type": "R"}, {"type": "AA"}],
+            ranks={"Q": 0, "W": 0, "E": 0, "R": 1},
+            enemy={"hp": 5000, "current_hp": 5000, "bonus_hp": 0,
+                   "armor": 0, "mr": 0},
+        )
+        true_hit = next(
+            event for event in result["events"]
+            if "natural-crit bonus" in event["source"])
+        expected = (
+            result["stats"]["total_ad"]
+            * result["stats"]["crit_damage"] / 100.0
+            * result["stats"]["crit_chance"] / 100.0
+            * ITEMS["fiendhunter_bolts"]["opening_barrage"][
+                "natural_crit_true_ratio"]
+            * 1.05
+        )
+        self.assertAlmostEqual(true_hit["raw"], expected, places=4)
 
 
 if __name__ == "__main__":

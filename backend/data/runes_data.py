@@ -1,5 +1,5 @@
 """Rune tree — structure transcribed from the user's rune overview screenshot,
-IDs/icons matched against Data Dragon 16.14.1 (identical tree).
+IDs/icons matched against Data Dragon 16.15.1 (identical tree).
 
 `dmg` marks runes that amplify or deal damage (or grant combat stats) and will
 be wired into the engine once the user provides each rune's math.
@@ -286,8 +286,14 @@ RUNE_MATH = {
     # (Kayle's R is area damage → 8%).
     8224: {"amp": 0.12, "amp_aoe": 0.08},
     # Jack of All Trades: 1 AH per unique item stat type; adaptive bonus at
-    # 5 (3.6 AD / 6 AP) and 10 (total 12 AD / 20 AP) stacks.
-    8316: {"haste_per": 1.0, "ad_5": 3.6, "ap_5": 6.0, "ad_10": 12.0, "ap_10": 20.0},
+    # 5 (4.8 AD / 8 AP) and 10 (total 12 AD / 20 AP) stacks.
+    8316: {
+        "haste_per": 1.0,
+        "ad_5": 4.8,
+        "ap_5": 8.0,
+        "ad_10": 12.0,
+        "ap_10": 20.0,
+    },
 }
 
 

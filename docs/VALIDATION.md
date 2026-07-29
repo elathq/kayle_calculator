@@ -18,11 +18,12 @@ remaining gaps. Implemented formulas are not repeated here; see the
 ## Current status
 
 ```text
-documentation review       = 2026-07-28
+documentation review       = 2026-07-29
 fixture asset version      = Data Dragon 16.14.1
-live Wiki rules patch      = 26.14
+live numeric catalog       = Data Dragon 16.15.1
+live rules patch           = 26.15
 original capture patch     = confirmation pending
-automated suite            = 120 Python + 3 frontend passing tests
+automated suite            = 122 Python + 3 frontend passing tests
 ```
 
 | Area | Status |
@@ -34,13 +35,14 @@ automated suite            = 120 Python + 3 frontend passing tests
 | R, Gunblade, Lich Bane | Practice Tool-confirmed |
 | Dusk and Dawn repeat timing | Patch 26.14 source-confirmed; fresh exact-total isolation needed |
 | Blade of the Ruined King | Patch 26.14 source-confirmed and regression-tested |
+| Terminus, Yun Tal, Jack of All Trades | Patch 26.15 source-confirmed and regression-tested |
 | Selected extended-combat and Energized items | Practice Tool-confirmed |
 | Last Stand | Source-confirmed |
 | W, Swiftmarch, boots, starters, progression | Source-confirmed and regression-tested |
 
 The first Practice Tool patch was not recorded. The fixture therefore keeps
 the honest status `patch confirmation pending`; this is separate from the
-dated live-Wiki rules audit performed for patch 26.14.
+dated live-rules audits performed for patches 26.14 and 26.15.
 
 ## Practice Tool protocol
 
@@ -612,7 +614,8 @@ damage.
 ### Terminus
 
 ```text
-setup = level 18, 128 AD, 1.315 AS
+legacy flat-Shadow setup = level 18, 128 AD, 1.315 AS
+capture patch = confirmation pending
 dummy = 3500 HP, 100 armor, 100 MR
 sequence = seven attacks
 
@@ -623,12 +626,20 @@ magic groups         = 22+34, 22+34, 23+36, 23+36,
 
 Dark stacks granted after attacks = 2, 4, 6
 simulator before ordering fix = 908.08
-simulator after ordering fix  = 904.15 damage / 2595.85 HP
+simulator evaluated with the 26.14 flat-Shadow formula
+  = 904.15 damage / 2595.85 HP
+
+patch 26.15 source update:
+  Shadow = 30 + 10% bonus AD + 10% AP
+  fixture bonus AD = 35.4
+  updated simulator = 917.43 damage / 2582.57 HP
 ```
 
 The triggering fire wave uses the previous penetration state. Terminus'
-30-magic-damage Shadow on-hit also applies life steal when the build has a
-life-steal source.
+Shadow on-hit also applies life steal when the build has a life-steal source.
+The legacy capture is retained as ordering evidence without assigning it an
+unrecorded patch. The new scaling terms are source-confirmed and
+regression-tested, pending a fresh 26.15 isolation.
 
 ### Bloodletter's Curse
 
@@ -853,6 +864,11 @@ that Rageblade, Kraken, Terminus, and Wit's End on-hit damage, plus Essence
 Reaver's Spellblade, benefit from life steal. These remain source-confirmed
 until isolated in the Practice Tool.
 
+Because the scenario has no target-distance input, the calculator does not
+assume perfect maximum-range spacing. It uses half of Hexoptics' 0-500 scaling
+interval: a fixed 250-unit midpoint and 5% Magnification. Rapid Firecannon's
+temporary range does not move this normalized target distance.
+
 ### Blade of the Ruined King
 
 The 2026-07-28 live Wiki and pinned Data Dragon review established 40 AD, 25%
@@ -899,7 +915,7 @@ source-confirmed examples:
 ## Regression suite
 
 ```text
-maintained automated tests = 120 Python + 3 frontend passing
+maintained automated tests = 122 Python + 3 frontend passing
 ```
 
 Coverage includes the precision pipeline, negative resistance, Q ordering,
@@ -918,7 +934,8 @@ node --test tests_js/snapshot.test.js
 ## Remaining validation limits
 
 - Record the exact patch for the original Practice Tool fixture on the next
-  fresh pass; the separate live-Wiki rules audit is pinned to patch 26.14.
+  fresh pass; separate live-rules audits are pinned to patches 26.14 and
+  26.15.
 - Last Stand needs a controlled own-HP isolation.
 - Preserve raw W, starter, and evolved-boots capture sheets.
 - Isolate the remaining source-confirmed item interactions.

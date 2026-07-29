@@ -1210,33 +1210,14 @@ class Simulation:
             f"Rapid Firecannon — Sharpshooter{tag}", at_time,
         )
 
-    def _assumed_attack_range(self):
-        if self.level >= PASSIVE["transcendent_level"]:
-            attack_range = 625.0
-        elif self.level >= PASSIVE["arisen_level"]:
-            attack_range = 525.0
-        else:
-            attack_range = float(KAYLE_AS["range_base"])
-
-        # There is intentionally no target-distance control. When Sharpshooter
-        # is ready, the next attack uses RFC's maximum legal attack range for
-        # distance-scaling effects such as Hexoptics Magnification.
-        if self.has_rapid_firecannon and self.rapid_firecannon_ready:
-            sharpshooter = ITEMS["rapid_firecannon"]["sharpshooter"]
-            attack_range += min(
-                attack_range * sharpshooter["bonus_range_pct"],
-                sharpshooter["bonus_range_cap"],
-            )
-        return attack_range
-
     def _hexoptics_amp(self):
         if not self.has_hexoptics:
             return 0.0
-        attack_range = self._assumed_attack_range()
         magnification = ITEMS["hexoptics_c44"]["magnification"]
         return min(
             magnification["max_amp"],
-            attack_range * magnification["amp_per_unit"],
+            magnification["assumed_distance_units"]
+            * magnification["amp_per_unit"],
         )
 
     def _begin_basic_attack(self, at_time):
@@ -1382,7 +1363,9 @@ class Simulation:
             if "onhit_magic" in it:
                 oh = it["onhit_magic"]
                 self._deal(
-                    oh["flat"] + oh["ap_ratio"] * self.ap,
+                    oh["flat"]
+                    + oh["ap_ratio"] * self.ap
+                    + oh.get("bonus_ad_ratio", 0.0) * self.bonus_ad,
                     "magic",
                     f"{it['name']} on-hit{tag}",
                     at_time,

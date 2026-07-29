@@ -4,10 +4,11 @@ This is the external-source ledger. It records provenance and version pins; it
 does not duplicate the formulas in the [Simulation model](MODEL.md).
 
 ```text
-last review          = 2026-07-28
+last review          = 2026-07-29
 local Riot asset set = Data Dragon 16.14.1
-live rules snapshot  = League Wiki patch 26.14
-League Wiki pages    = live and may change after the 2026-07-28 review
+live numeric catalog = Data Dragon 16.15.1
+live rules snapshot  = patch 26.15
+League Wiki pages    = live and may change after the 2026-07-29 review
 ```
 
 Related records:
@@ -132,8 +133,8 @@ baseline fixture is
 
 ### Live AD-item audit
 
-On 2026-07-28, the direct Wiki pages above were checked against the live
-[patch 26.14](https://wiki.leagueoflegends.com/en-us/V26.14) rules. The
+On 2026-07-28, the direct Wiki pages above were checked against
+[patch 26.14](https://wiki.leagueoflegends.com/en-us/V26.14). The
 22-item AD-related pass covered Doran's Bow, Doran's Blade, Guinsoo's
 Rageblade, Kraken Slayer, Terminus, Infinity Edge, Blade of the Ruined King,
 Bloodthirster, Hexoptics C44, Phantom Dancer, Rapid Firecannon, Experimental
@@ -150,6 +151,7 @@ ordinary proc damage; the resulting formulas and trigger rules are recorded in
 
 Relevant Riot change records:
 
+- [Patch 26.15 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-15-notes/)
 - [Patch 25.14 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-14-notes/)
 - [Patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/)
 - [Patch 26.11 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-11-notes/)
@@ -158,6 +160,11 @@ Relevant Riot change records:
 The linked notes support these unusual changes:
 
 ```text
+patch 26.15:
+  - Terminus Shadow = 30 + 10% bonus AD + 10% AP
+  - Yun Tal = 3000 gold and 45% attack speed
+  - Jack of All Trades at 5/10 types = 8/20 AP or 4.8/12 AD
+
 patch 25.14:
   - Blade current-health on-hit = 9% melee / 6% ranged
 
@@ -175,16 +182,18 @@ patch 25.21:
   - Doran's Ring sustain change
 ```
 
-The live item page is authoritative when a later patch changed the release
-value. Non-damage passives may appear in the UI while remaining outside the
-[model scope](MODEL.md#assumptions-and-exclusions).
+The 2026-07-29 patch 26.15 delta was checked against Riot's
+[`16.15.1 item.json`](https://ddragon.leagueoflegends.com/cdn/16.15.1/data/en_US/item.json)
+and patch notes. The live item page is authoritative when a later patch
+changed the release value. Non-damage passives may appear in the UI while
+remaining outside the [model scope](MODEL.md#assumptions-and-exclusions).
 
 Catalog cross-check snapshot:
 
 ```text
-review date        = 2026-07-28
-Riot catalog       = Data Dragon 16.14.1
-live Wiki patch    = 26.14
+review date        = 2026-07-29
+Riot catalog       = Data Dragon 16.15.1
+live rules patch   = 26.15
 Blade of the Ruined King ID = 3153
 Bloodletter's Curse ID = 8010
 Stormrazor ID          = 3097
@@ -201,10 +210,10 @@ supplied detailed formulas and trigger classification.
 ## Rune references
 
 Rune names, slots, IDs, and icon paths are matched against Riot's
-[`runesReforged.json`](https://ddragon.leagueoflegends.com/cdn/16.14.1/data/en_US/runesReforged.json).
+[`runesReforged.json`](https://ddragon.leagueoflegends.com/cdn/16.15.1/data/en_US/runesReforged.json).
 Live client descriptions, including Lethal Tempo's melee/ranged attack-speed
 split, are checked against CommunityDragon's pinned-client
-[`perks.json`](https://raw.communitydragon.org/16.14/plugins/rcp-be-lol-game-data/global/default/v1/perks.json).
+[`perks.json`](https://raw.communitydragon.org/16.15/plugins/rcp-be-lol-game-data/global/default/v1/perks.json).
 The general reference is the [Rune page](https://wiki.leagueoflegends.com/en-us/Rune).
 
 | Path | Formula sources |

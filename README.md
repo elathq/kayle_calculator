@@ -182,10 +182,11 @@ Evidence labels:
 Documentation snapshot:
 
 ```text
-review date                    = 2026-07-28
+review date                    = 2026-07-29
 local Riot asset set           = Data Dragon 16.14.1
+live numeric catalog           = Data Dragon 16.15.1
 baseline Practice Tool patch   = confirmation pending
-automated tests                = 120 Python + 3 frontend passing
+automated tests                = 122 Python + 3 frontend passing
 ```
 
 The calculator is not automatically synchronized to live patches. A changed
@@ -303,6 +304,7 @@ idle.
   and receive a red outline at the exact invalid sequence position.
 - Random critical strikes use expected damage.
 - Q before E is assumed to hit before E; target distance is not an input.
+  Hexoptics therefore uses a fixed 250-unit midpoint for 5% Magnification.
 - **Use E for AA cancel** switches a directly following `AA -> E` between the
   fast reset and the normal full attack interval. Windups use Kayle's current
   attack speed and align to the game's 30 Hz clock; ordinary attack timers stay

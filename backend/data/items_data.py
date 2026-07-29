@@ -1,7 +1,7 @@
 """Item data — transcribed from the sources in docs/SOURCES.md.
 
 Icons are served locally from frontend/icons/<id>.png (downloaded from Data
-Dragon 16.14.1 using the item IDs); the frontend falls back to the
+Dragon using the item IDs); the frontend falls back to the
 Community Dragon CDN if a local icon is missing.
 Stats keys: ad, ap, attack_speed (%), ability_haste, ultimate_haste, health,
 armor, mr, magic_pen_flat, magic_pen_pct (fraction), armor_pen_pct (fraction),
@@ -27,7 +27,11 @@ ICON_CDN = "https://cdn.communitydragon.org/latest/item/{id}"
 # Adding or changing normal stats requires NO engine.py change.
 # Supported reusable damage fields also require NO engine.py change:
 #   onhit_magic_flat: 45.0
-#   onhit_magic: {"flat": 15.0, "ap_ratio": 0.15}
+#   onhit_magic: {
+#       "flat": 15.0,
+#       "ap_ratio": 0.15,
+#       "bonus_ad_ratio": 0.10,  # optional; defaults to 0
+#   }
 #   onhit_current_hp: {...}
 #   spellblade: {...}
 #   active: {...}
@@ -404,13 +408,17 @@ ITEMS = {
         "stats": {"ad": 30, "attack_speed": 35},
         "tags": ["terminus", "fatality", "blight"],
         "passive_text": (
-            "Shadow: attacks deal 30 magic damage on-hit and that damage "
-            "applies life steal. Juxtaposition: "
+            "Shadow: attacks deal 30 (+10% bonus AD) (+10% AP) magic damage "
+            "on-hit and that damage applies life steal. Juxtaposition: "
             "champion hits alternate Light and Dark; Dark grants 10% armor "
             "and magic penetration for 5 seconds, stacking 3 times. Limited "
             "to 1 Fatality and 1 Blight item. Light's defensive resistances "
             "are outside this outgoing-damage model."),
-        "onhit_magic_flat": 30.0,
+        "onhit_magic": {
+            "flat": 30.0,
+            "ap_ratio": 0.10,
+            "bonus_ad_ratio": 0.10,
+        },
         "onhit_applies_life_steal": True,
         "juxtaposition": {
             "dark_pen_per_stack": 0.10, "max_stacks": 3,
@@ -484,11 +492,17 @@ ITEMS = {
         "passive_text": (
             "Magnification: deal 1% increased basic damage per 50 units to "
             "the target, up to 10% at 500. With no distance input, the "
-            "simulator assumes Kayle attacks at her current maximum attack "
-            "range. This also amplifies other basic damage such as Kraken "
-            "Slayer's Bring It Down. Arcane Aim's post-takedown range cannot "
-            "affect the tracked target because simulation stops on its death."),
-        "magnification": {"amp_per_unit": 0.01 / 50.0, "max_amp": 0.10},
+            "simulator uses a fixed 250-unit midpoint, half of "
+            "Magnification's maximum scaling distance, for a 5% average "
+            "amplification. This also amplifies other basic damage such as "
+            "Kraken Slayer's Bring It Down. Arcane Aim grants 100 range for "
+            "8 seconds after a takedown within 3 seconds; it cannot affect "
+            "the tracked target because simulation stops on its death."),
+        "magnification": {
+            "amp_per_unit": 0.01 / 50.0,
+            "max_amp": 0.10,
+            "assumed_distance_units": 250.0,
+        },
     },
     "phantom_dancer": {
         "id": 3046,
@@ -509,8 +523,11 @@ ITEMS = {
             "damage on-hit and gains 35% bonus range, capped at +150. The "
             "Energized-start option controls whether the combo begins ready. "
             "Attacks generate shared Energize stacks; movement generation is "
-            "outside this model. The extended range is included in Hexoptics "
+            "outside this model. Hexoptics uses its fixed 250-unit midpoint "
+            "assumption, so this temporary range does not change "
             "Magnification."),
+        # Range values are retained as source/tooltip metadata. With no
+        # target-distance input, they do not alter any simulated damage.
         "sharpshooter": {
             "damage": 40.0, "bonus_range_pct": 0.35,
             "bonus_range_cap": 150.0,
@@ -561,10 +578,10 @@ ITEMS = {
     "yun_tal_wildarrows": {
         "id": 3032,
         "name": "Yun Tal Wildarrows",
-        "cost": 3100,
+        "cost": 3000,
         # The live item deliberately carries innate 0% crit. It contributes a
         # distinct stat type to Jack of All Trades before training adds crit.
-        "stats": {"ad": 50, "attack_speed": 40, "crit_chance": 0},
+        "stats": {"ad": 50, "attack_speed": 45, "crit_chance": 0},
         "tags": ["yun_tal"],
         "passive_text": (
             "Practice Makes Lethal: attacks permanently grant 0.4% critical "
@@ -750,10 +767,18 @@ def validate_item_catalog(items=None):
 
         if "onhit_magic" in item:
             onhit = item["onhit_magic"]
+            allowed_onhit = {"flat", "ap_ratio", "bonus_ad_ratio"}
             if not isinstance(onhit, dict) or "flat" not in onhit \
-                    or "ap_ratio" not in onhit:
+                    or "ap_ratio" not in onhit \
+                    or not set(onhit) <= allowed_onhit:
                 raise ValueError(
-                    f"{label}.onhit_magic needs flat and ap_ratio")
+                    f"{label}.onhit_magic needs flat and ap_ratio; "
+                    "bonus_ad_ratio is optional")
+            for field, value in onhit.items():
+                if not isinstance(value, (int, float)) or value < 0:
+                    raise ValueError(
+                        f"{label}.onhit_magic.{field} must be a "
+                        "non-negative number")
 
         if "onhit_current_hp" in item:
             onhit = item["onhit_current_hp"]
@@ -782,6 +807,23 @@ def validate_item_catalog(items=None):
                 raise ValueError(
                     f"{label}.onhit_current_hp.applies_life_steal must be "
                     "boolean")
+
+        if "magnification" in item:
+            magnification = item["magnification"]
+            required_magnification = {
+                "amp_per_unit", "max_amp", "assumed_distance_units",
+            }
+            if not isinstance(magnification, dict) \
+                    or set(magnification) != required_magnification:
+                raise ValueError(
+                    f"{label}.magnification needs exactly "
+                    f"{sorted(required_magnification)}")
+            for field in required_magnification:
+                value = magnification[field]
+                if not isinstance(value, (int, float)) or value < 0:
+                    raise ValueError(
+                        f"{label}.magnification.{field} must be a "
+                        "non-negative number")
 
     return True
 

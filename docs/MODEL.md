@@ -508,6 +508,7 @@ Kraken maximum missing-HP amplification = 75%
 Kraken stack duration = 3 s
 
 Terminus sequence = Light, Dark, Light, Dark, ...
+Terminus Shadow = 30 + 0.10 * bonus AD + 0.10 * AP magic on-hit
 Dark penetration per stack = 10% armor and MR
 maximum Dark stacks = 3
 maximum penetration = 30%
@@ -524,7 +525,8 @@ LDR cap = 15% at 1500 target bonus HP
 
 Hexoptics Magnification = 1% per 50 assumed units
 Hexoptics cap = 10% at 500 units
-assumed attack range = 175 / 525 / 625 by passive stage
+assumed target distance = fixed 250-unit midpoint
+default Magnification = 5%
 ```
 
 Kraken reads target HP before the triggering attack frame. Terminus grants a
@@ -774,7 +776,7 @@ own impairment multiplier = 15%
 
 Jack of All Trades:
   haste = 1 per unique supported stat type
-  at 5 stat types = 3.6 AD or 6 AP
+  at 5 stat types = 4.8 AD or 8 AP
   at 10 stat types = 12 AD or 20 AP
 ```
 
@@ -804,7 +806,8 @@ Deliberate normalizations:
 
 - Q before E is treated as landed before E.
 - Comet uses point-blank damage and is assumed to hit.
-- Hexoptics uses current maximum attack range instead of target distance.
+- Hexoptics has no target-distance input, so it uses the fixed 250-unit
+  midpoint of its 0-500 scaling range for a 5% average amplification.
 - Approach Velocity assumes movement toward the combo target.
 - Random crit and crit-based cooldown reduction use expected values.
 - Fleet's delayed movement update synchronizes before the next action.
