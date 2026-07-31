@@ -28,6 +28,12 @@ Use the value from the `key` column inside `builds[].items`.
 | `boots_of_swiftness` | Boots of Swiftness | — |
 | `berserkers_greaves` | Berserker's Greaves | — |
 | `gunmetal_greaves` | Gunmetal Greaves | — |
+| `gluttonous_greaves` | Gluttonous Greaves | — |
+| `immortal_path` | Immortal Path | — |
+| `mercurys_treads` | Mercury's Treads | — |
+| `chainlaced_crushers` | Chainlaced Crushers | — |
+| `plated_steelcaps` | Plated Steelcaps | — |
+| `armored_advance` | Armored Advance | — |
 | `dorans_ring` | Doran's Ring | — |
 | `dorans_bow` | Doran's Bow | — |
 | `dorans_blade` | Doran's Blade | — |
@@ -448,6 +454,7 @@ rewards reject the complete request with HTTP `400`.
 | `kayle_hp_pct` | `100` | `0..100` |
 | `dh_souls` | `0` | Whole number from `0..10000` |
 | `dark_seal_stacks` | `0` | Whole number from `0..10` |
+| `gluttonous_stacks` | `0` | Whole number from `0..10`; applies to Gluttonous Greaves and Immortal Path |
 | `legend_stacks` | `10` | Whole number from `0..10` |
 | `relentless_stacks` | `0` | Whole number from `0..5` |
 | `pre_stacked_zeal` | `true` | Boolean |

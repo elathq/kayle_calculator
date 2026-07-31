@@ -31,7 +31,7 @@ const TARGET_INPUT_IDS = Object.freeze([
 const SIMULATION_NUMERIC_INPUT_IDS = Object.freeze([
   ...TARGET_INPUT_IDS,
   "gameTime", "kayleHp", "dhSouls", "darkSealStacks",
-  "legendStacks", "relentlessStacks",
+  "gluttonousStacks", "legendStacks", "relentlessStacks",
 ]);
 
 const state = {
@@ -652,10 +652,15 @@ function renderBuilds() {
 
 function updateConditionalControls() {
   const darkSealField = $("darkSealStacksField");
-  if (!darkSealField) return;
+  const gluttonousField = $("gluttonousStacksField");
+  if (!darkSealField || !gluttonousField) return;
   const hasDarkSeal = state.builds.some((build) =>
     build.items.includes("dark_seal"));
+  const hasGluttonous = state.builds.some((build) =>
+    build.items.some((key) =>
+      key && ITEM_BY_KEY[key]?.tags.includes("gluttonous_slay")));
   darkSealField.classList.toggle("hidden", !hasDarkSeal);
+  gluttonousField.classList.toggle("hidden", !hasGluttonous);
 }
 
 /* ================= item overlay ================= */
@@ -1277,6 +1282,7 @@ function buildSimulationPayload() {
       kayle_hp_pct: Number($("kayleHp").value),
       dh_souls: Number($("dhSouls").value),
       dark_seal_stacks: Number($("darkSealStacks").value),
+      gluttonous_stacks: Number($("gluttonousStacks").value),
       legend_stacks: Number($("legendStacks").value),
       relentless_stacks: Number($("relentlessStacks").value),
       fleet_starts_energized: $("fleetEnergized").checked,
@@ -1492,8 +1498,20 @@ function renderResults(results) {
         <span class="k">Attack speed</span><span class="v">${r.stats.attack_speed_final}</span>
         <span class="k">AD / AP</span><span class="v">${r.stats.total_ad} / ${r.stats.ap}</span>
         <span class="k">Movement speed</span><span class="v">${r.stats.movement_speed ?? "—"}</span>
+        ${r.stats.omnivamp > 0
+          ? `<span class="k">Omnivamp</span><span class="v">${r.stats.omnivamp}%</span>`
+          : ""}
         ${r.stats.life_steal > 0
           ? `<span class="k">Life steal</span><span class="v">${r.stats.life_steal}%</span>`
+          : ""}
+        ${r.stats.item_armor > 0
+          ? `<span class="k">Item armor</span><span class="v">${r.stats.item_armor}</span>`
+          : ""}
+        ${r.stats.item_mr > 0
+          ? `<span class="k">Item magic resist</span><span class="v">${r.stats.item_mr}</span>`
+          : ""}
+        ${r.stats.tenacity > 0
+          ? `<span class="k">Tenacity</span><span class="v">${r.stats.tenacity}%</span>`
           : ""}
         ${r.stats.slow_resist > 0
           ? `<span class="k">Slow resistance</span><span class="v">${r.stats.slow_resist}%</span>`

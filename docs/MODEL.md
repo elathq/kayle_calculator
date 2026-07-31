@@ -386,12 +386,22 @@ Boots                 = 25 flat MS
 Boots of Swiftness    = 55 flat MS + 25% slow resistance
 Berserker's Greaves   = 45 flat MS + 25% attack speed
 Gunmetal Greaves      = 45 flat MS + 40% attack speed + 5% life steal
+Gluttonous Greaves    = 45 flat MS + 4% omnivamp
+Immortal Path         = Gluttonous stats/passive + Now and Forever
+Mercury's Treads      = 45 flat MS + 20 MR + 30% tenacity
+Chainlaced Crushers   = 45 flat MS + 30 MR + 30% tenacity
+Plated Steelcaps      = 45 flat MS + 25 armor + 10% incoming Attack reduction
+Armored Advance       = 45 flat MS + 35 armor + Steelcaps' Plating
 Sorcerer's Shoes      = 45 flat MS + 12 flat magic penetration
 Spellslinger's Shoes  = 45 flat MS + 18 flat and 8% magic penetration
 Swiftmarch            = 65 flat MS + 5% displayed-MS adaptive force
 Magical Footwear      = +10 flat MS to equipped Boots
 
 Gunmetal life-steal rate = 5%
+Gluttonous Slay = +0.6% omnivamp per champion takedown, max 10 stacks
+Gluttonous maximum omnivamp = 4% + 10 * 0.6% = 10%
+Immortal Path above 50% Kayle HP = 4% outgoing damage amplifier
+Immortal Path below 50% Kayle HP = 12% outgoing healing amplifier
 Blade of the Ruined King life-steal rate = 10%
 Bloodthirster life-steal rate = 15%
 life-steal healing = life-steal rate * post-mitigation eligible damage
@@ -402,6 +412,14 @@ which reduces combo duration and raises DPS without changing the number of
 configured attacks. Swifties do not grant attack speed, damage, or Swiftmarch
 adaptive force. Incoming slows are outside the current simulation, so their
 slow resistance is displayed but does not alter the timeline.
+
+Immortal Path, Chainlaced Crushers, and Armored Advance are free mid-role
+quest evolutions and activate the same 8% bonus-AD/AP quest reward as the
+other evolved boots. At exactly 50% Kayle HP, neither Immortal Path branch is
+active. The calculator applies its healing branch to modeled omnivamp, life
+steal, champion/rune healing, and W. Chainlaced Crushers' magic shield,
+Armored Advance's physical shield, and Steelcaps' incoming Attack reduction
+are displayed but not simulated because the target never attacks Kayle.
 
 Bloodthirster's life steal contributes to reported healing. Ichorshield is not
 created because the simulator has no own-current-HP or own-shield state from

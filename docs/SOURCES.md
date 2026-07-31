@@ -4,8 +4,8 @@ This is the external-source ledger. It records provenance and version pins; it
 does not duplicate the formulas in the [Simulation model](MODEL.md).
 
 ```text
-last review          = 2026-07-29
-local Riot asset set = Data Dragon 16.14.1
+last review          = 2026-07-31
+local Riot asset set = Data Dragon 16.14.1 + CommunityDragon 16.15 boots
 live numeric catalog = Data Dragon 16.15.1
 live rules snapshot  = patch 26.15
 League Wiki pages    = live and may change after the 2026-07-29 review
@@ -89,6 +89,12 @@ baseline fixture is
 | Boots of Swiftness | [Boots of Swiftness](https://wiki.leagueoflegends.com/en-us/Boots_of_Swiftness) |
 | Berserker's Greaves | [Berserker's Greaves](https://wiki.leagueoflegends.com/en-us/Berserker%27s_Greaves) |
 | Gunmetal Greaves | [Gunmetal Greaves](https://wiki.leagueoflegends.com/en-us/Gunmetal_Greaves) |
+| Gluttonous Greaves | [Gluttonous Greaves](https://wiki.leagueoflegends.com/en-us/Gluttonous_Greaves) |
+| Immortal Path | [Immortal Path](https://wiki.leagueoflegends.com/en-us/Immortal_Path) |
+| Mercury's Treads | [Mercury's Treads](https://wiki.leagueoflegends.com/en-us/Mercury%27s_Treads) |
+| Chainlaced Crushers | [Chainlaced Crushers](https://wiki.leagueoflegends.com/en-us/Chainlaced_Crushers) |
+| Plated Steelcaps | [Plated Steelcaps](https://wiki.leagueoflegends.com/en-us/Plated_Steelcaps) |
+| Armored Advance | [Armored Advance](https://wiki.leagueoflegends.com/en-us/Armored_Advance) |
 | Doran's Ring | [Doran's Ring](https://wiki.leagueoflegends.com/en-us/Doran%27s_Ring) |
 | Doran's Bow | [Doran's Bow](https://wiki.leagueoflegends.com/en-us/Doran%27s_Bow) |
 | Doran's Blade | [Doran's Blade](https://wiki.leagueoflegends.com/en-us/Doran%27s_Blade) |
@@ -152,6 +158,9 @@ ordinary proc damage; the resulting formulas and trigger rules are recorded in
 Relevant Riot change records:
 
 - [Patch 26.15 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-15-notes/)
+- [Patch 26.14 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-14-notes/)
+- [Patch 26.10 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-10-notes/)
+- [Patch 26.3 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/patch-26-3-notes/)
 - [Patch 25.14 notes](https://www.leagueoflegends.com/en-us/news/game-updates/patch-25-14-notes/)
 - [Patch 26.9 notes](https://www.leagueoflegends.com/en-gb/news/game-updates/league-of-legends-patch-26-9-notes/)
 - [Patch 26.11 notes](https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-26-11-notes/)
@@ -164,6 +173,17 @@ patch 26.15:
   - Terminus Shadow = 30 + 10% bonus AD + 10% AP
   - Yun Tal = 3000 gold and 45% attack speed
   - Jack of All Trades at 5/10 types = 8/20 AP or 4.8/12 AD
+
+patch 26.14:
+  - Immortal Path above-half damage = 4%
+  - Immortal Path below-half healing/shielding/regeneration = 12%
+
+patch 26.10:
+  - Gluttonous Greaves = 1000 gold
+  - Slay = 0.6% omnivamp per takedown, maximum 10 stacks
+
+patch 26.3:
+  - Chainlaced Crushers and Armored Advance defensive shield updates
 
 patch 25.14:
   - Blade current-health on-hit = 9% melee / 6% ranged
@@ -204,8 +224,10 @@ Yun Tal Wildarrows ID  = 3032
 Navori Flickerblade ID = 6675
 ```
 
-Data Dragon supplied standard names, IDs, prices, stats, and icons. Wiki pages
-supplied detailed formulas and trigger classification.
+Data Dragon supplied standard names, IDs, prices, and stats. Most local icons
+use the pinned Data Dragon set; the six boots added on 2026-07-31 use their
+CommunityDragon 16.15 client assets. Wiki pages supplied detailed formulas and
+trigger classification.
 
 ## Rune references
 

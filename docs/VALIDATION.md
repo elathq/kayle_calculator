@@ -516,11 +516,17 @@ slope continues through levels 19..20
 Starter limit = 1
 Boots limit   = 1
 Dark Seal Glory cap = 10
+Gluttonous Slay cap = 10
 mid-role bonus AD/AP multiplier = 1.08
 evolved mid-role boots illegal at levels 19..20
 ```
 
-Covered entries include base and evolved boots, every starter, and Dark Seal.
+Covered entries include base and evolved boots, every starter, Dark Seal, and
+Gluttonous Slay. Focused regression cases verify 4% -> 10% omnivamp across
+0 -> 10 Slay stacks, Immortal Path's 4% above-half damage branch, its 12%
+below-half healing branch, and the exact defensive stats on Mercs/Steelcaps
+and their evolutions. Incoming shields and attack reduction remain
+display-only.
 
 ## Item interaction isolations
 

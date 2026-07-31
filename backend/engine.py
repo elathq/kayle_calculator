@@ -88,6 +88,8 @@ class Simulation:
             0, min(5, int(self.options.get("relentless_stacks", 0))))
         self.dark_seal_stacks = max(
             0, min(10, int(self.options.get("dark_seal_stacks", 0))))
+        self.gluttonous_stacks = max(
+            0, min(10, int(self.options.get("gluttonous_stacks", 0))))
         self.fleet_starts_energized = bool(
             self.options.get("fleet_starts_energized", True))
         self.assume_river = bool(self.options.get("assume_river", False))
@@ -119,7 +121,7 @@ class Simulation:
         self.kayle_max_hp = base["hp"]
 
         ad = ap = as_pct = hp = haste = ultimate_haste = flat_pen = omnivamp = 0.0
-        life_steal = slow_resist = 0.0
+        armor = mr = tenacity = life_steal = slow_resist = 0.0
         flat_ms = pct_ms = 0.0
         pct_pen = armor_pct_pen = 0.0
         crit_chance = crit_damage_bonus = 0.0
@@ -135,6 +137,11 @@ class Simulation:
             hp += s.get("health", 0)
             haste += s.get("ability_haste", 0)
             ultimate_haste += s.get("ultimate_haste", 0)
+            armor += s.get("armor", 0)
+            mr += s.get("mr", 0)
+            tenacity = 1 - (
+                (1 - tenacity) * (1 - s.get("tenacity", 0) / 100.0)
+            )
             flat_pen += s.get("magic_pen_flat", 0)
             pct_pen = 1 - (1 - pct_pen) * (1 - s.get("magic_pen_pct", 0))
             armor_pct_pen = 1 - (1 - armor_pct_pen) * (1 - s.get("armor_pen_pct", 0))
@@ -148,6 +155,9 @@ class Simulation:
             if "dark_seal" in it.get("tags", []):
                 ap += it["glory_ap_per_stack"] * min(
                     it["glory_max_stacks"], self.dark_seal_stacks)
+            if "gluttonous_slay" in it.get("tags", []):
+                omnivamp += it["slay_omnivamp_per_stack"] * min(
+                    it["slay_max_stacks"], self.gluttonous_stacks)
             if "rabadon" in it["tags"]:
                 ap_mult = it["ap_multiplier"]
 
@@ -260,6 +270,9 @@ class Simulation:
         self.base_crit_chance = self.crit_chance
         self.crit_damage = KAYLE_AS["crit_damage"] + crit_damage_bonus / 100.0
         self.omnivamp = omnivamp
+        self.item_armor = armor
+        self.item_mr = mr
+        self.tenacity = tenacity * 100.0
         self.life_steal = life_steal
         self.slow_resist = slow_resist
         self.flat_move_speed = flat_ms
@@ -269,6 +282,7 @@ class Simulation:
         self.has_shadowflame_crit = any(
             "shadowflame_crit" in ITEMS[k]["tags"] for k in self.items)
         self.has_rylai = "rylais_crystal_scepter" in self.items
+        self.has_immortal_path = "immortal_path" in self.items
         self.has_swiftmarch = "swiftmarch" in self.items
         self.has_cosmic_drive = "cosmic_drive" in self.items
         self.has_stormsurge = "stormsurge" in self.items
@@ -624,6 +638,10 @@ class Simulation:
     def _amp_multiplier(self, at_time):
         mult = 1.0
         target_hp = self._target_hp_at_frame_start(at_time)
+        if self.has_immortal_path:
+            now_and_forever = ITEMS["immortal_path"]["now_and_forever"]
+            if self.kayle_hp_pct > now_and_forever["hp_threshold"] * 100:
+                mult *= 1 + now_and_forever["damage_amp"]
         # PTA amp: not on the proc's own frame ("damage dealt on the same frame
         # that the buff is gained will not be amplified")
         if (m := self._rune(8005)) and self.pta_amp_from is not None \
@@ -653,6 +671,15 @@ class Simulation:
                 self.enemy_bonus_hp * giant["amp_per_bonus_hp"],
             )
         return mult
+
+    def _healing_multiplier(self):
+        """Return outgoing healing amplification from Kayle's current HP."""
+        if not self.has_immortal_path:
+            return 1.0
+        now_and_forever = ITEMS["immortal_path"]["now_and_forever"]
+        if self.kayle_hp_pct < now_and_forever["hp_threshold"] * 100:
+            return 1 + now_and_forever["healing_amp"]
+        return 1.0
 
     def _record_damage(self, calc, dtype, source, at_time, *, grants_omnivamp=True):
         """Apply one resolved damage instance and add its audit trail."""
@@ -690,7 +717,8 @@ class Simulation:
                 omnivamp += (corruption["omnivamp_melee"] if self.is_melee
                              else corruption["omnivamp_ranged"])
         if grants_omnivamp and omnivamp:
-            self.heal_total += dealt * omnivamp
+            self.heal_total += (
+                dealt * omnivamp * self._healing_multiplier())
         self.end_time = max(self.end_time, at_time)
         self._movement_runes_after_damage(dealt, at_time)
         if self.has_cosmic_drive and dtype in ("magic", "true"):
@@ -757,10 +785,11 @@ class Simulation:
                    source, at_time)
 
     def _heal(self, amount, source, at_time):
-        self.heal_total += amount
+        amplified = amount * self._healing_multiplier()
+        self.heal_total += amplified
         self.events.append({
             "t": round(at_time, 3), "source": source, "type": "heal",
-            "pre": round(amount, 1), "dealt": round(amount, 1),
+            "pre": round(amount, 1), "dealt": round(amplified, 1),
         })
 
     def _flush_scheduled(self, up_to):
@@ -965,7 +994,8 @@ class Simulation:
         m = self._rune(8010)
         if m and self.conq_stacks >= m["max_stacks"]:
             pct = m["heal_melee"] if self.is_melee else m["heal_ranged"]
-            self.heal_total += dealt * pct
+            self.heal_total += (
+                dealt * pct * self._healing_multiplier())
 
     def _electro_stack(self, at_time):
         m = self._rune(8112)
@@ -2023,8 +2053,19 @@ class Simulation:
                     8.0 if self.mid_role_quest_completed else 0.0),
                 "dark_seal_glory_stacks": (
                     self.dark_seal_stacks if "dark_seal" in self.items else 0),
+                "gluttonous_slay_stacks": (
+                    self.gluttonous_stacks
+                    if any(
+                        "gluttonous_slay" in ITEMS[key].get("tags", [])
+                        for key in self.items
+                    )
+                    else 0
+                ),
                 "bonus_hp": self.bonus_hp,
                 "max_hp": round(self.kayle_max_hp, 2),
+                "item_armor": round(self.item_armor, 1),
+                "item_mr": round(self.item_mr, 1),
+                "tenacity": round(self.tenacity, 1),
                 "ability_haste": self.haste,
                 "ultimate_haste": self.ultimate_haste,
                 "magic_pen_pct": round(self.pct_pen * 100, 1),
@@ -2032,6 +2073,7 @@ class Simulation:
                 "armor_pen_pct": round(self.armor_pct_pen * 100, 1),
                 "crit_chance": round(self.crit_chance * 100, 1),
                 "crit_damage": round(self.crit_damage * 100, 1),
+                "omnivamp": round(self.omnivamp * 100, 1),
                 "life_steal": round(self.life_steal * 100, 1),
                 "slow_resist": round(self.slow_resist, 1),
                 "adaptive_type": "physical" if self.adaptive_physical else "magic",

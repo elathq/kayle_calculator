@@ -106,7 +106,8 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         # top-lane quest is what unlocks levels 19-20, so both states cannot
         # exist in one legal build.
         for key in (
-                "swiftmarch", "spellslingers_shoes", "gunmetal_greaves"):
+                "swiftmarch", "spellslingers_shoes", "gunmetal_greaves",
+                "immortal_path", "chainlaced_crushers", "armored_advance"):
             with self.subTest(key=key):
                 with self.assertRaisesRegex(
                         ItemBuildValidationError, "levels 19"):
@@ -275,6 +276,9 @@ class ProgressionAndStarterItemTests(unittest.TestCase):
         self.assertTrue({
             "boots", "dorans_ring", "dorans_bow", "dorans_blade", "dark_seal",
             "boots_of_swiftness", "berserkers_greaves", "gunmetal_greaves",
+            "gluttonous_greaves", "immortal_path",
+            "mercurys_treads", "chainlaced_crushers",
+            "plated_steelcaps", "armored_advance",
         }.issubset(keys))
 
 

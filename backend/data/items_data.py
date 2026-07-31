@@ -56,6 +56,7 @@ GENERIC_EFFECT_FIELDS = {
 # completely new effect shape needs code in engine.py and a regression test.
 CUSTOM_EFFECT_FIELDS = {
     "adaptive_force_from_total_ms", "glory_ap_per_stack", "glory_max_stacks",
+    "slay_omnivamp_per_stack", "slay_max_stacks", "now_and_forever",
     "ap_multiplier", "shadowflame_crit", "seething", "spelldance",
     "void_corruption", "void_infusion_bonus_hp_ratio", "bring_it_down",
     "juxtaposition", "vile_decay", "magnification", "sharpshooter",
@@ -107,6 +108,97 @@ ITEMS = {
             "40% attack speed, 45 movement speed, and 5% life steal. Equipping "
             "this evolved mid-role boot activates the completed quest reward, "
             "which also increases bonus AD and AP by 8%."),
+    },
+    "gluttonous_greaves": {
+        "id": 3008,
+        "name": "Gluttonous Greaves",
+        "cost": 1000,
+        "stats": {"move_speed_flat": 45, "omnivamp": 0.04},
+        "tags": ["boots", "gluttonous_slay"],
+        "passive_text": (
+            "45 movement speed and 4% omnivamp. Slay: champion takedowns "
+            "grant 0.6% omnivamp, up to 10 stacks (10% total omnivamp at "
+            "maximum stacks)."),
+        "slay_omnivamp_per_stack": 0.006,
+        "slay_max_stacks": 10,
+    },
+    "immortal_path": {
+        "id": 3168,
+        "name": "Immortal Path",
+        "cost": 1000,
+        "stats": {"move_speed_flat": 45, "omnivamp": 0.04},
+        "tags": [
+            "boots", "gluttonous_slay", "immortal_path", "mid_role_quest",
+        ],
+        "passive_text": (
+            "Free mid-role quest evolution of Gluttonous Greaves. Retains "
+            "Slay (0.6% omnivamp per champion takedown, up to 10). Now and "
+            "Forever: while above 50% maximum health, deal 4% increased "
+            "damage; while below 50%, gain 12% increased healing, shielding, "
+            "and regeneration. The quest also increases bonus AD and AP by "
+            "8%."),
+        "slay_omnivamp_per_stack": 0.006,
+        "slay_max_stacks": 10,
+        "now_and_forever": {
+            "hp_threshold": 0.50,
+            "damage_amp": 0.04,
+            "healing_amp": 0.12,
+        },
+    },
+    "mercurys_treads": {
+        "id": 3111,
+        "name": "Mercury's Treads",
+        "cost": 1250,
+        "stats": {
+            "mr": 20, "move_speed_flat": 45, "tenacity": 30,
+        },
+        "tags": ["boots"],
+        "passive_text": (
+            "20 magic resistance, 45 movement speed, and 30% tenacity. "
+            "Defensive stats do not change outgoing damage, DPS, or TTK."),
+    },
+    "chainlaced_crushers": {
+        "id": 3173,
+        "name": "Chainlaced Crushers",
+        "cost": 1250,
+        "stats": {
+            "mr": 30, "move_speed_flat": 45, "tenacity": 30,
+        },
+        "tags": ["boots", "mid_role_quest"],
+        "passive_text": (
+            "Free mid-role quest evolution of Mercury's Treads. 30 magic "
+            "resistance, 45 movement speed, and 30% tenacity. Noxian "
+            "Persistence grants a 100-200 (levels 9-18) +8% bonus HP magic "
+            "shield for 5 seconds after taking magic damage from a champion "
+            "(15-second cooldown). Incoming damage and shields are outside "
+            "this outgoing-damage model. The quest also increases bonus AD "
+            "and AP by 8%."),
+    },
+    "plated_steelcaps": {
+        "id": 3047,
+        "name": "Plated Steelcaps",
+        "cost": 1200,
+        "stats": {"armor": 25, "move_speed_flat": 45},
+        "tags": ["boots"],
+        "passive_text": (
+            "25 armor and 45 movement speed. Plating reduces incoming damage "
+            "from attacks by 10% (excluding turret attacks). Incoming damage "
+            "is outside this outgoing-damage model."),
+    },
+    "armored_advance": {
+        "id": 3174,
+        "name": "Armored Advance",
+        "cost": 1200,
+        "stats": {"armor": 35, "move_speed_flat": 45},
+        "tags": ["boots", "mid_role_quest"],
+        "passive_text": (
+            "Free mid-role quest evolution of Plated Steelcaps. 35 armor and "
+            "45 movement speed. Retains Plating's 10% attack-damage "
+            "reduction. Noxian Endurance grants a 100-200 (levels 9-18) +8% "
+            "bonus HP physical shield for 5 seconds after taking physical "
+            "damage from a champion (15-second cooldown). Incoming damage "
+            "and shields are outside this outgoing-damage model. The quest "
+            "also increases bonus AD and AP by 8%."),
     },
     "dorans_ring": {
         "id": 1056,
@@ -824,6 +916,38 @@ def validate_item_catalog(items=None):
                     raise ValueError(
                         f"{label}.magnification.{field} must be a "
                         "non-negative number")
+
+        slay_fields = {
+            "slay_omnivamp_per_stack", "slay_max_stacks",
+        }
+        if set(item) & slay_fields:
+            if not slay_fields <= set(item):
+                raise ValueError(
+                    f"{label} must define both {sorted(slay_fields)}")
+            per_stack = item["slay_omnivamp_per_stack"]
+            max_stacks = item["slay_max_stacks"]
+            if not isinstance(per_stack, (int, float)) \
+                    or not 0 <= per_stack <= 1:
+                raise ValueError(
+                    f"{label}.slay_omnivamp_per_stack must use a 0-1 fraction")
+            if not isinstance(max_stacks, int) or max_stacks < 1:
+                raise ValueError(
+                    f"{label}.slay_max_stacks must be a positive integer")
+
+        if "now_and_forever" in item:
+            effect = item["now_and_forever"]
+            required_effect = {
+                "hp_threshold", "damage_amp", "healing_amp",
+            }
+            if not isinstance(effect, dict) or set(effect) != required_effect:
+                raise ValueError(
+                    f"{label}.now_and_forever needs exactly "
+                    f"{sorted(required_effect)}")
+            for field, value in effect.items():
+                if not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                    raise ValueError(
+                        f"{label}.now_and_forever.{field} must use a "
+                        "0-1 fraction")
 
     return True
 

@@ -31,6 +31,12 @@ NEW_ITEMS = {
     "stormrazor": 3097,
     "fiendhunter_bolts": 2512,
     "stormsurge": 4646,
+    "gluttonous_greaves": 3008,
+    "immortal_path": 3168,
+    "mercurys_treads": 3111,
+    "chainlaced_crushers": 3173,
+    "plated_steelcaps": 3047,
+    "armored_advance": 3174,
 }
 
 
@@ -72,6 +78,16 @@ class AddedItemTests(unittest.TestCase):
         invalid["hexoptics_c44"]["magnification"][
             "assumed_distance_units"] = -1
         with self.assertRaisesRegex(ValueError, "assumed_distance_units"):
+            validate_item_catalog(invalid)
+
+        invalid = copy.deepcopy(ITEMS)
+        invalid["immortal_path"]["now_and_forever"]["damage_amp"] = "4%"
+        with self.assertRaisesRegex(ValueError, "damage_amp"):
+            validate_item_catalog(invalid)
+
+        invalid = copy.deepcopy(ITEMS)
+        invalid["gluttonous_greaves"]["slay_max_stacks"] = 0
+        with self.assertRaisesRegex(ValueError, "slay_max_stacks"):
             validate_item_catalog(invalid)
 
     def test_all_added_items_are_in_the_picker_with_current_ids(self):
@@ -123,6 +139,24 @@ class AddedItemTests(unittest.TestCase):
         self.assertEqual(ITEMS["stormsurge"]["stats"], {
             "ap": 90, "magic_pen_flat": 15, "move_speed_pct": 6,
         })
+        self.assertEqual(ITEMS["gluttonous_greaves"]["stats"], {
+            "move_speed_flat": 45, "omnivamp": 0.04,
+        })
+        self.assertEqual(ITEMS["immortal_path"]["stats"], {
+            "move_speed_flat": 45, "omnivamp": 0.04,
+        })
+        self.assertEqual(ITEMS["mercurys_treads"]["stats"], {
+            "mr": 20, "move_speed_flat": 45, "tenacity": 30,
+        })
+        self.assertEqual(ITEMS["chainlaced_crushers"]["stats"], {
+            "mr": 30, "move_speed_flat": 45, "tenacity": 30,
+        })
+        self.assertEqual(ITEMS["plated_steelcaps"]["stats"], {
+            "armor": 25, "move_speed_flat": 45,
+        })
+        self.assertEqual(ITEMS["armored_advance"]["stats"], {
+            "armor": 35, "move_speed_flat": 45,
+        })
 
         with self.assertRaisesRegex(ItemBuildValidationError, "Fatality"):
             Simulation(
@@ -148,6 +182,94 @@ class AddedItemTests(unittest.TestCase):
                 ["lich_bane", "essence_reaver"],
                 {"hp": 5000, "armor": 100, "mr": 100}, [], {},
             )
+
+    def test_gluttonous_slay_stacks_scale_omnivamp_and_healing(self):
+        enemy = {
+            "hp": 10000, "current_hp": 10000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        combo = [{"type": "AA"}]
+        empty = run(
+            ["gluttonous_greaves"], combo, enemy=enemy,
+            options={"gluttonous_stacks": 0},
+        )
+        full = run(
+            ["gluttonous_greaves"], combo, enemy=enemy,
+            options={"gluttonous_stacks": 10},
+        )
+
+        self.assertEqual(empty["stats"]["omnivamp"], 4.0)
+        self.assertEqual(full["stats"]["omnivamp"], 10.0)
+        self.assertEqual(empty["stats"]["gluttonous_slay_stacks"], 0)
+        self.assertEqual(full["stats"]["gluttonous_slay_stacks"], 10)
+        self.assertEqual(empty["total_damage"], full["total_damage"])
+        self.assertAlmostEqual(
+            full["healing"] / empty["healing"], 2.5, places=1)
+
+    def test_immortal_path_switches_damage_and_healing_at_half_health(self):
+        enemy = {
+            "hp": 10000, "current_hp": 10000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        combo = [{"type": "AA"}]
+        at_half = run(
+            ["immortal_path"], combo, enemy=enemy,
+            options={"kayle_hp_pct": 50, "gluttonous_stacks": 10},
+        )
+        above_half = run(
+            ["immortal_path"], combo, enemy=enemy,
+            options={"kayle_hp_pct": 100, "gluttonous_stacks": 10},
+        )
+        below_half = run(
+            ["immortal_path"], combo, enemy=enemy,
+            options={"kayle_hp_pct": 49, "gluttonous_stacks": 10},
+        )
+
+        self.assertAlmostEqual(
+            above_half["total_damage"] / at_half["total_damage"],
+            1.04,
+            places=3,
+        )
+        self.assertEqual(below_half["total_damage"], at_half["total_damage"])
+        self.assertAlmostEqual(
+            below_half["healing"] / at_half["healing"], 1.12, places=2)
+        self.assertEqual(above_half["stats"]["mid_role_quest_stat_bonus"], 8.0)
+
+    def test_defensive_boot_stats_are_reported_without_fake_outgoing_damage(self):
+        enemy = {
+            "hp": 10000, "current_hp": 10000, "bonus_hp": 0,
+            "armor": 0, "mr": 0,
+        }
+        combo = [{"type": "AA"}]
+        options = {"shards": ["adaptive"]}
+        baseline = run([], combo, enemy=enemy, options=options)
+        mercs = run(
+            ["mercurys_treads"], combo, enemy=enemy, options=options)
+        crushers = run(
+            ["chainlaced_crushers"], combo, enemy=enemy, options=options)
+        steelcaps = run(
+            ["plated_steelcaps"], combo, enemy=enemy, options=options)
+        advance = run(
+            ["armored_advance"], combo, enemy=enemy, options=options)
+        stacked_tenacity = run(
+            ["mercurys_treads", "wits_end"],
+            combo,
+            enemy=enemy,
+            options=options,
+        )
+
+        self.assertEqual(mercs["stats"]["item_mr"], 20)
+        self.assertEqual(mercs["stats"]["tenacity"], 30)
+        self.assertEqual(stacked_tenacity["stats"]["tenacity"], 44)
+        self.assertEqual(crushers["stats"]["item_mr"], 30)
+        self.assertEqual(steelcaps["stats"]["item_armor"], 25)
+        self.assertEqual(advance["stats"]["item_armor"], 35)
+        self.assertEqual(mercs["total_damage"], baseline["total_damage"])
+        self.assertEqual(steelcaps["total_damage"], baseline["total_damage"])
+        self.assertGreater(
+            crushers["total_damage"], mercs["total_damage"],
+            "The evolved mid quest's 8% bonus AD/AP must still apply.",
+        )
 
     def test_infinity_edge_uses_expected_crit_damage(self):
         level = 10

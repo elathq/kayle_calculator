@@ -309,8 +309,9 @@ idle.
   fast reset and the normal full attack interval. Windups use Kayle's current
   attack speed and align to the game's 30 Hz clock; ordinary attack timers stay
   continuous. Q is always treated as a point-blank hit with no travel time.
-- Mana, multi-target chains, takedown-only effects, shields, and selected
-  utility effects are outside the model.
+- Mana, multi-target chains, automatic takedown events, incoming shields, and
+  selected utility effects are outside the model. Gluttonous Slay stacks are
+  supplied explicitly under Advanced Conditions.
 - Top-lane quest levels and evolved mid-lane boots are mutually exclusive.
 
 Role restriction:
@@ -321,6 +322,9 @@ illegal at those levels:
   - Swiftmarch
   - Spellslinger's Shoes
   - Gunmetal Greaves
+  - Immortal Path
+  - Chainlaced Crushers
+  - Armored Advance
 ```
 
 The complete list is in [Simulation model](docs/MODEL.md#assumptions-and-exclusions).

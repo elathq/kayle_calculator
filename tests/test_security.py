@@ -72,6 +72,19 @@ class SecurityValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RequestValidationError, "true or false"):
             validate_simulation_payload(payload)
 
+    def test_gluttonous_stacks_are_integer_and_capped_at_ten(self):
+        payload = minimal_payload()
+        payload["options"]["gluttonous_stacks"] = 10
+        validated = validate_simulation_payload(payload)
+        self.assertEqual(validated["options"]["gluttonous_stacks"], 10)
+
+        for invalid in (10.5, 11, -1):
+            with self.subTest(invalid=invalid):
+                payload = minimal_payload()
+                payload["options"]["gluttonous_stacks"] = invalid
+                with self.assertRaises(RequestValidationError):
+                    validate_simulation_payload(payload)
+
     def test_public_runes_use_readable_keys_instead_of_numeric_ids(self):
         payload = minimal_payload()
         payload["builds"][0]["runes"].update({
@@ -207,7 +220,8 @@ class SecurityValidationTests(unittest.TestCase):
         )
 
         for key in (
-                "gunmetal_greaves", "swiftmarch", "spellslingers_shoes"):
+                "gunmetal_greaves", "swiftmarch", "spellslingers_shoes",
+                "immortal_path", "chainlaced_crushers", "armored_advance"):
             with self.subTest(key=key, level=18):
                 payload = minimal_payload()
                 payload["builds"][0]["items"] = [key]

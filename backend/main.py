@@ -214,6 +214,7 @@ def validate_simulation_payload(payload):
         "kayle_hp_pct": (0, 100, False),
         "dh_souls": (0, 10_000, True),
         "dark_seal_stacks": (0, 10, True),
+        "gluttonous_stacks": (0, 10, True),
         "legend_stacks": (0, 10, True),
         "relentless_stacks": (0, 5, True),
     }
