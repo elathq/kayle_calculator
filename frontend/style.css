@@ -138,6 +138,17 @@ button { color: inherit; }
   align-items: start;
 }
 
+.app-footer {
+  width: min(1640px, 100%);
+  margin: 0 auto;
+  padding: 20px clamp(16px, 2.5vw, 36px) 28px;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.app-footer p { max-width: 100ch; margin: 0; }
+
 .config-column, .content-col {
   display: flex;
   min-width: 0;
